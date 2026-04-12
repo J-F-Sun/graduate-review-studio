@@ -1,0 +1,11 @@
+.deps/
+.testdeps/
+__pycache__/
+*.pyc
+data/
+tmp_test/
+tmp_test_exports/
+.idea/
+venv/
+.DS_Store
+.playwright-cli/

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>毕业论文审稿工作台</title>
+    <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260412-dropzone-v7" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>上传论文</h2>
+          </div>
+          <form id="paper-form" class="stacked-form">
+            <label>
+              <span>论文标题</span>
+              <input name="title" type="text" placeholder="例如：基于 XXX 的毕业设计" required />
+            </label>
+            <div class="two-col">
+              <label>
+                <span>论文类型</span>
+                <select name="degree_type">
+                  <option value="本科">本科</option>
+                  <option value="硕士">硕士</option>
+                </select>
+              </label>
+              <label>
+                <span>审稿模式</span>
+                <select name="review_mode">
+                  <option value="快速审稿">快速审稿</option>
+                  <option value="深度审稿">深度审稿</option>
+                </select>
+              </label>
+            </div>
+            <label class="file-field">
+              <span>论文文件</span>
+              <div class="file-dropzone" data-dropzone>
+                <input name="file" type="file" accept=".docx,.pdf" required />
+                <div class="file-dropzone-copy">
+                  <strong>点击选择论文，或直接拖拽到这里</strong>
+                  <small>支持 .docx、.pdf</small>
+                  <span class="dropzone-filename" data-dropzone-filename>未选择文件</span>
+                </div>
+              </div>
+            </label>
+            <button type="submit" class="primary">上传论文</button>
+          </form>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>规则管理</h2>
+          </div>
+          <form id="rule-form" class="stacked-form">
+            <label>
+              <span>规则集名称</span>
+              <input name="name" type="text" placeholder="例如：学院格式要求" required />
+            </label>
+            <label class="file-field">
+              <span>规则文件</span>
+              <div class="file-dropzone" data-dropzone>
+                <input name="file" type="file" accept=".txt,.md,.docx,.pdf" />
+                <div class="file-dropzone-copy">
+                  <strong>点击选择规则文件，或直接拖拽到这里</strong>
+                  <small>支持 .txt、.md、.docx、.pdf</small>
+                  <span class="dropzone-filename" data-dropzone-filename>未选择文件</span>
+                </div>
+              </div>
+            </label>
+            <label>
+              <span>或直接粘贴规则内容</span>
+              <textarea name="content" rows="5" placeholder="例如：重点检查创新点与章节对应关系、重点指出语病和句子不通顺位置"></textarea>
+            </label>
+            <button type="submit" class="secondary">保存规则集</button>
+          </form>
+          <div id="rule-list" class="rule-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>百炼设置</h2>
+          </div>
+          <form id="settings-form" class="stacked-form compact-form">
+            <label>
+              <span>接口地址</span>
+              <input name="base_url" type="text" />
+            </label>
+            <label>
+              <span>百炼 API Key</span>
+              <input name="api_key" type="password" placeholder="留空则保留现有值" />
+            </label>
+            <section class="settings-group">
+              <div class="settings-group-head">
+                <h3>文本审稿模型</h3>
+                <p>用于章节审稿、总评汇总、评分与修改建议生成。</p>
+              </div>
+              <div class="settings-group-grid">
+                <label>
+                  <span>文本模型</span>
+                  <input name="text_model" type="text" />
+                </label>
+                <label>
+                  <span>Temperature</span>
+                  <input name="temperature" type="number" step="0.1" min="0" max="2" />
+                </label>
+                <label class="settings-span-2">
+                  <span>文本输出上限（Max Tokens）</span>
+                  <input name="max_tokens" type="number" min="512" step="256" />
+                </label>
+              </div>
+            </section>
+            <section class="settings-group">
+              <div class="settings-group-head">
+                <h3>图片理解模型</h3>
+                <p>用于图片、流程图、界面截图与图表内容理解。</p>
+              </div>
+              <div class="settings-group-grid">
+                <label>
+                  <span>视觉模型</span>
+                  <input name="vision_model" type="text" />
+                </label>
+                <label>
+                  <span>图片理解数量上限</span>
+                  <input name="image_analysis_limit" type="number" min="0" max="50" />
+                </label>
+                <label class="settings-span-2">
+                  <span>图片输出上限（Max Tokens）</span>
+                  <input name="vision_max_tokens" type="number" min="128" step="128" />
+                </label>
+              </div>
+            </section>
+            <section class="settings-group">
+              <div class="settings-group-head">
+                <h3>导出内容</h3>
+                <p>控制 Markdown、PDF 和 Word 导出时包含哪些模块。</p>
+              </div>
+              <div class="toggle-grid" id="export-toggles"></div>
+            </section>
+            <button type="submit" class="secondary">保存设置</button>
+          </form>
+        </section>
+      </aside>
+
+      <main class="main">
+        <section class="topbar-panel panel">
+          <div class="topbar-intro">
+            <div class="topbar-brand">
+              <img src="/static/logo.svg" alt="毕业论文审稿工作台 Logo" class="brand-logo topbar-logo" />
+              <div class="topbar-copy">
+                <p class="eyebrow">Graduate Review Studio</p>
+                <h1>毕业论文审稿工作台</h1>
+                <p class="muted">
+                  面向本科与硕士论文的本地审稿工作区，支持结构化解析、图表理解、规则审查与多格式导出。
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="topbar-side">
+            <div class="hero-stats topbar-stats" id="hero-stats"></div>
+            <div class="topbar-appearance-compact">
+              <div class="topbar-appearance-head">
+                <h2>界面外观</h2>
+              </div>
+              <div class="theme-switcher compact-switcher" aria-label="背景颜色选择">
+                <button type="button" class="theme-option" data-theme-option="paper" aria-pressed="false">
+                  <span class="theme-swatch theme-paper"></span>
+                  <span>暖米纸</span>
+                </button>
+                <button type="button" class="theme-option" data-theme-option="mist" aria-pressed="false">
+                  <span class="theme-swatch theme-mist"></span>
+                  <span>雾青灰</span>
+                </button>
+                <button type="button" class="theme-option" data-theme-option="blush" aria-pressed="false">
+                  <span class="theme-swatch theme-blush"></span>
+                  <span>晨曦粉</span>
+                </button>
+                <button type="button" class="theme-option" data-theme-option="sage" aria-pressed="false">
+                  <span class="theme-swatch theme-sage"></span>
+                  <span>浅苔绿</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="workspace">
+          <div class="papers-column panel">
+            <div class="panel-head">
+              <h2>论文任务</h2>
+              <button id="refresh-btn" class="ghost">刷新</button>
+            </div>
+            <div id="paper-list" class="paper-list"></div>
+          </div>
+
+          <div class="detail-column panel">
+            <div id="detail-empty" class="empty-state">
+              <h3>选择一篇论文开始查看</h3>
+              <p>上传成功后，左侧会出现任务卡片。点击任意论文，即可进入解析、审稿和双栏对应查看页面。</p>
+            </div>
+
+            <div id="paper-detail" class="paper-detail hidden">
+              <div class="detail-header">
+                <div>
+                  <p id="paper-meta-line" class="eyebrow"></p>
+                  <h2 id="paper-title"></h2>
+                </div>
+                <div class="detail-actions">
+                  <button id="reparse-btn" class="ghost">重新解析</button>
+                  <button id="review-btn" class="primary">开始审稿</button>
+                  <button id="export-md-btn" class="secondary">导出 Markdown</button>
+                  <button id="export-pdf-btn" class="secondary">导出 PDF</button>
+                  <button id="export-docx-btn" class="secondary">导出 Word 批注版</button>
+                  <button id="delete-btn" class="danger">删除任务</button>
+                </div>
+              </div>
+
+              <div class="tab-bar">
+                <button class="tab active" data-tab="overview">总览</button>
+                <button class="tab" data-tab="parsed">解析视图</button>
+                <button class="tab" data-tab="review">审稿报告</button>
+                <button class="tab" data-tab="mapping">论文与意见对应</button>
+              </div>
+
+              <section id="tab-overview" class="tab-panel active"></section>
+              <section id="tab-parsed" class="tab-panel"></section>
+              <section id="tab-review" class="tab-panel"></section>
+              <section id="tab-mapping" class="tab-panel"></section>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+    <div id="rule-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-rule-modal></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="rule-modal-title">
+        <div class="panel-head modal-head">
+          <div>
+            <h3 id="rule-modal-title">已有规则</h3>
+            <p id="rule-modal-meta" class="muted"></p>
+          </div>
+          <button type="button" class="ghost modal-close" data-close-rule-modal>关闭</button>
+        </div>
+        <div id="rule-modal-body" class="modal-body"></div>
+      </div>
+    </div>
+    <div id="review-rules-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-review-rules-modal></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="review-rules-modal-title">
+        <div class="panel-head modal-head">
+          <div>
+            <h3 id="review-rules-modal-title">选择本次审稿规则</h3>
+            <p id="review-rules-modal-meta" class="muted"></p>
+          </div>
+          <button type="button" class="ghost modal-close" data-close-review-rules-modal>关闭</button>
+        </div>
+        <div id="review-rules-modal-body" class="modal-body"></div>
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="review-rules-clear-btn">清空选择</button>
+          <button type="button" class="secondary" id="review-rules-save-btn">应用规则</button>
+        </div>
+      </div>
+    </div>
+    <script src="/static/app.js?v=20260412-dropzone-v7" defer></script>
+  </body>
+</html>
