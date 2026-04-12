@@ -13,6 +13,10 @@
   欢迎使用，欢迎提交 <strong>Issues</strong> 和 <strong>Pull Requests</strong>。
 </p>
 
+<p align="center">
+  公开版补充说明见 <a href="./docs/release-notes.md">docs/release-notes.md</a>
+</p>
+
 ## 项目简介
 
 这个项目的目标不是把整篇论文直接丢给大模型“问一句”，而是先把论文拆成更适合模型理解和定位的问题结构，再结合系统默认规则与用户自定义规则，生成更细粒度、更可追踪的审稿意见。
@@ -302,4 +306,3 @@ PYTHONPATH=.deps python3 -m uvicorn app:app --host 127.0.0.1 --port 8000 --reloa
 - 补充必要的说明或验证方式
 
 ## License
-
