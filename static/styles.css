@@ -114,8 +114,8 @@ select {
 
 .app-shell {
   display: grid;
-  grid-template-columns: minmax(320px, 390px) 1fr;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
   min-height: calc(100vh - 40px);
 }
 
@@ -287,6 +287,98 @@ select {
   margin-bottom: 0;
 }
 
+.app-main {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.hero-stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(320px, 520px);
+  gap: 20px;
+  min-height: 132px;
+  overflow: hidden;
+  padding-top: 8px;
+  padding-bottom: 10px;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.hero-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top left, rgba(154, 63, 35, 0.06), transparent 42%),
+    radial-gradient(circle at right 18%, rgba(38, 70, 83, 0.06), transparent 38%);
+  pointer-events: none;
+}
+
+.hero-stage-copy,
+.hero-stage-side {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-stage-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 8px;
+  padding-top: 0;
+}
+
+.hero-title-button {
+  margin: 2px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: clamp(34px, 4vw, 54px);
+  line-height: 1.08;
+  writing-mode: horizontal-tb;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  text-align: left;
+  font-family: "Iowan Old Style", "Songti SC", Georgia, serif;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  width: fit-content;
+}
+
+.hero-title-button:hover {
+  color: var(--primary);
+}
+
+.hero-stage-copy .muted {
+  max-width: 760px;
+  font-size: 16px;
+  line-height: 1.55;
+  writing-mode: horizontal-tb;
+  white-space: normal;
+  word-break: break-word;
+  margin: 0;
+}
+
+.hero-stage-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.hero-stage-stats {
+  width: 100%;
+  max-width: 480px;
+  align-self: flex-end;
+}
+
 .topbar-stats {
   align-self: stretch;
 }
@@ -298,17 +390,17 @@ select {
 }
 
 .hero-stat {
-  padding: 14px 12px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid var(--line);
+  padding: 10px 8px;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   gap: 6px;
-  min-height: 92px;
+  min-height: 76px;
 }
 
 .hero-stat small {
@@ -320,6 +412,218 @@ select {
   display: block;
   font-size: 28px;
   font-family: "Iowan Old Style", "Songti SC", Georgia, serif;
+}
+
+.icon-only-button {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.main-switcher {
+  display: inline-flex;
+  gap: 10px;
+  align-self: flex-start;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid var(--line);
+}
+
+.main-switch-tab {
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 18px;
+  color: var(--muted);
+  background: transparent;
+}
+
+.main-switch-tab.active {
+  background: rgba(154, 63, 35, 0.12);
+  color: var(--primary);
+}
+
+.main-switch-settings {
+  width: 46px;
+  min-width: 46px;
+  padding: 0;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+}
+
+.main-switch-settings:hover {
+  background: rgba(38, 70, 83, 0.08);
+  color: var(--secondary);
+}
+
+.main-tab-panel {
+  display: none;
+}
+
+.main-tab-panel.active {
+  display: block;
+}
+
+.review-launch {
+  min-height: 320px;
+  display: grid;
+  place-items: center;
+  padding: 24px 0 8px;
+}
+
+.review-launch-form {
+  width: 100%;
+  display: grid;
+  gap: 18px;
+}
+
+.review-launch-dropzone {
+  position: relative;
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 34px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1.5px solid rgba(106, 79, 55, 0.18);
+  box-shadow: 0 20px 40px rgba(106, 79, 55, 0.08);
+  overflow: hidden;
+}
+
+.review-launch-dropzone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.review-launch-dropzone.drag-over {
+  border-color: rgba(154, 63, 35, 0.36);
+  background: rgba(255, 249, 244, 0.94);
+}
+
+.review-launch-copy {
+  position: relative;
+  z-index: 0;
+  text-align: center;
+  display: grid;
+  gap: 10px;
+  padding: 22px 18px 6px;
+}
+
+.review-launch-copy strong {
+  font-family: "Iowan Old Style", "Songti SC", Georgia, serif;
+  font-size: clamp(28px, 4vw, 46px);
+  color: var(--text);
+}
+
+.review-launch-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.review-launch-filename {
+  justify-self: center;
+  font-size: 15px;
+  padding: 10px 16px;
+  border-radius: 999px;
+}
+
+.review-launch-submit {
+  justify-self: center;
+  min-width: 180px;
+  position: relative;
+  z-index: 2;
+}
+
+.review-launch-options {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.review-launch-options label {
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+  color: var(--muted);
+}
+
+.review-stage {
+  display: grid;
+  margin-top: 8px;
+}
+
+.review-stage-card {
+  display: grid;
+  gap: 18px;
+}
+
+.review-stage-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.review-stage-head h2 {
+  margin: 6px 0 0;
+  font-size: clamp(28px, 3vw, 42px);
+}
+
+.review-stage-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.review-stage-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.review-stage-block {
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+}
+
+.review-stage-summary {
+  display: grid;
+  gap: 12px;
+}
+
+.review-home-score-summary {
+  gap: 12px;
+}
+
+.review-stage-rules {
+  display: grid;
+  gap: 12px;
+  grid-column: 1 / -1;
+}
+
+.review-stage-scoreline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
 .badge {
@@ -911,6 +1215,122 @@ button.ghost {
   font-family: "Iowan Old Style", "Songti SC", Georgia, serif;
 }
 
+.review-report-conclusion,
+.review-report-scores,
+.review-report-section-title {
+  display: grid;
+  gap: 12px;
+}
+
+.report-summary-line {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.report-verdict-line {
+  font-weight: 700;
+}
+
+.report-verdict-line.pass {
+  color: var(--success);
+}
+
+.report-verdict-line.fail {
+  color: var(--danger);
+}
+
+.review-total-score {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(106, 79, 55, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.review-total-score strong {
+  font-size: 42px;
+  font-family: "Iowan Old Style", "Songti SC", Georgia, serif;
+}
+
+.review-total-score.pass,
+.review-total-score.pass strong,
+.review-total-score.pass span {
+  color: var(--success);
+}
+
+.review-total-score.fail,
+.review-total-score.fail strong,
+.review-total-score.fail span {
+  color: var(--danger);
+}
+
+.review-dimension-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.review-dimension-card strong {
+  font-size: 30px;
+}
+
+.review-chapter-modules {
+  display: grid;
+  gap: 14px;
+}
+
+.review-chapter-module {
+  display: grid;
+  gap: 12px;
+}
+
+.chapter-assessment {
+  margin: 0;
+}
+
+.chapter-issue-list {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 10px;
+}
+
+.chapter-issue-list li {
+  display: grid;
+  gap: 4px;
+}
+
+.chapter-issue-item {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(106, 79, 55, 0.12);
+}
+
+.chapter-issue-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.chapter-issue-meta strong {
+  color: var(--primary);
+}
+
+.chapter-issue-meta span {
+  color: var(--muted);
+}
+
+.chapter-issue-evidence,
+.chapter-issue-analysis {
+  margin: 0;
+  line-height: 1.7;
+}
+
 .issue-list,
 .chapter-list,
 .parsed-grid {
@@ -1412,6 +1832,7 @@ button.ghost {
 
 .settings-modal-card {
   width: min(1120px, calc(100vw - 40px));
+  height: min(860px, calc(100vh - 48px));
 }
 
 .settings-shell {
@@ -1420,6 +1841,7 @@ button.ghost {
   gap: 18px;
   min-height: 0;
   flex: 1;
+  overflow: hidden;
 }
 
 .settings-tabs {
@@ -1444,6 +1866,7 @@ button.ghost {
 
 .settings-panels {
   min-height: 0;
+  height: 100%;
   overflow: auto;
   padding-right: 4px;
 }
@@ -1459,7 +1882,9 @@ button.ghost {
 .settings-panel {
   display: none;
   grid-template-columns: minmax(0, 1fr);
+  align-content: start;
   gap: 14px;
+  min-height: 100%;
 }
 
 .settings-panel.active {
@@ -1565,14 +1990,24 @@ button.ghost {
 
 @media (max-width: 1260px) {
   .app-shell,
+  .hero-stage,
   .workspace,
   .mapping-layout,
   .overview-grid,
-  .score-grid {
+  .score-grid,
+  .review-dimension-grid {
     grid-template-columns: 1fr;
   }
 
+  .hero-stage-side {
+    align-items: flex-start;
+  }
+
   .topbar-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .review-stage-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1610,12 +2045,36 @@ button.ghost {
     grid-template-columns: 1fr;
   }
 
+  .main-switcher {
+    width: 100%;
+  }
+
+  .main-switch-tab {
+    flex: 1;
+  }
+
+  .review-launch-dropzone {
+    border-radius: 26px;
+    padding: 18px;
+  }
+
+  .review-launch-copy strong {
+    font-size: clamp(24px, 10vw, 36px);
+  }
+
   .detail-actions,
   .tab-bar {
     width: 100%;
   }
 
   .detail-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .review-launch-options,
+  .review-stage-actions,
+  .hero-stage-side {
     flex-direction: column;
     align-items: stretch;
   }
@@ -1640,5 +2099,9 @@ button.ghost {
 
   button {
     width: 100%;
+  }
+
+  .icon-only-button {
+    width: 48px;
   }
 }

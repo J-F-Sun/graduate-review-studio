@@ -9,6 +9,7 @@ from .llm import LLMRequestError
 from .parsers import parse_docx, parse_pdf
 from .review import generate_review
 from .storage import Storage
+from .title import guess_title_from_title_page, infer_title_with_llm
 from .utils import now_iso
 
 
@@ -89,9 +90,18 @@ class JobManager:
                 parsed = await asyncio.to_thread(parse_pdf, source_path, storage=self.storage, paper_id=paper_id)
             else:
                 raise ValueError(f"暂不支持的论文格式：{suffix}")
+            settings = self.storage.read_settings()
+            try:
+                title = await infer_title_with_llm(source_path, settings.get("llm", {}))
+            except Exception as exc:
+                self.logger.warning("title inference failed paper_id=%s error=%s", paper_id, exc)
+                title = ""
+            if not title:
+                title = guess_title_from_title_page(source_path)
             self.storage.write_parsed(paper_id, parsed)
             self.storage.update_paper_metadata(
                 paper_id,
+                title=title or metadata.get("title") or source_path.stem,
                 parse_status="done",
                 review_status="idle",
                 status_message="解析完成，可以开始审稿",

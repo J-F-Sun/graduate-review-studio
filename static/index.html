@@ -5,122 +5,113 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>毕业论文审稿工作台</title>
     <link rel="icon" href="/static/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/static/styles.css?v=20260414-settings-modal-v1" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260414-review-home-v4" />
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar">
-        <section class="panel">
-          <div class="panel-head">
-            <h2>上传论文</h2>
+      <main class="main app-main">
+        <section class="hero-stage panel">
+          <div class="hero-stage-copy">
+            <p class="eyebrow">Graduate Review Studio</p>
+            <button type="button" id="home-title-btn" class="hero-title-button">毕业论文审稿工作台</button>
+            <p class="muted">
+              面向本科与硕士论文的本地审稿工作区，支持结构化解析、图表理解、规则审查与多格式导出。
+            </p>
           </div>
-          <form id="paper-form" class="stacked-form">
-            <label>
-              <span>论文标题</span>
-              <input name="title" type="text" placeholder="例如：基于 XXX 的毕业设计" required />
-            </label>
-            <div class="two-col">
-              <label>
-                <span>论文类型</span>
-                <select name="degree_type">
-                  <option value="本科">本科</option>
-                  <option value="硕士">硕士</option>
-                </select>
-              </label>
-              <label>
-                <span>审稿模式</span>
-                <select name="review_mode">
-                  <option value="快速审稿">快速审稿</option>
-                  <option value="深度审稿">深度审稿</option>
-                </select>
-              </label>
-            </div>
-            <label class="file-field">
-              <span>论文文件</span>
-              <div class="file-dropzone" data-dropzone>
+          <div class="hero-stage-side">
+            <div class="hero-stats hero-stage-stats" id="hero-stats"></div>
+          </div>
+        </section>
+
+        <div class="main-switcher">
+          <button type="button" class="main-switch-tab active" data-main-tab="review">论文审核</button>
+          <button type="button" class="main-switch-tab" data-main-tab="history">历史任务</button>
+          <button type="button" id="settings-btn" class="main-switch-settings" aria-label="打开设置">
+            <span aria-hidden="true">&#9881;</span>
+          </button>
+        </div>
+
+        <section id="main-tab-review" class="main-tab-panel active">
+          <section class="review-launch">
+            <form id="paper-form" class="review-launch-form">
+              <input name="title" type="hidden" value="" />
+              <label class="review-launch-dropzone" data-dropzone>
                 <input name="file" type="file" accept=".docx,.pdf" required />
-                <div class="file-dropzone-copy">
-                  <strong>点击选择论文，或直接拖拽到这里</strong>
-                  <small>支持 .docx、.pdf</small>
-                  <span class="dropzone-filename" data-dropzone-filename>未选择文件</span>
+                <div class="review-launch-copy">
+                  <strong>拖入论文，开始审稿</strong>
+                  <p>支持 .docx、.pdf，论文标题会在解析时自动从标题页识别。</p>
+                  <span class="dropzone-filename review-launch-filename" data-dropzone-filename>点击选择论文，或直接拖拽到这里</span>
                 </div>
+                <button type="submit" class="primary review-launch-submit">开始上传</button>
+              </label>
+              <div class="review-launch-options">
+                <label>
+                  <span>论文类型</span>
+                  <select name="degree_type">
+                    <option value="本科" selected>本科</option>
+                    <option value="硕士">硕士</option>
+                  </select>
+                </label>
+                <label>
+                  <span>审稿模式</span>
+                  <select name="review_mode">
+                    <option value="快速审稿" selected>快速审稿</option>
+                    <option value="深度审稿">深度审稿</option>
+                  </select>
+                </label>
               </div>
-            </label>
-            <button type="submit" class="primary">上传论文</button>
-          </form>
-        </section>
-      </aside>
-
-      <main class="main">
-        <section class="topbar-panel panel">
-          <div class="topbar-intro">
-            <div class="topbar-brand">
-              <img src="/static/logo.svg" alt="毕业论文审稿工作台 Logo" class="brand-logo topbar-logo" />
-              <div class="topbar-copy">
-                <p class="eyebrow">Graduate Review Studio</p>
-                <h1>毕业论文审稿工作台</h1>
-                <p class="muted">
-                  面向本科与硕士论文的本地审稿工作区，支持结构化解析、图表理解、规则审查与多格式导出。
-                </p>
-              </div>
-            </div>
-            <div class="topbar-actions">
-              <button type="button" id="home-btn" class="ghost">Home</button>
-              <button type="button" id="settings-btn" class="ghost icon-button" aria-label="打开设置">
-                <span aria-hidden="true">&#9881;</span>
-                <span>设置</span>
-              </button>
-            </div>
-          </div>
-          <div class="topbar-side">
-            <div class="hero-stats topbar-stats" id="hero-stats"></div>
-          </div>
+            </form>
+          </section>
+          <section id="review-stage" class="review-stage hidden"></section>
         </section>
 
-        <section class="workspace">
-          <div class="papers-column panel">
-            <div class="panel-head">
-              <h2>论文任务</h2>
-              <button id="refresh-btn" class="ghost">刷新</button>
-            </div>
-            <div id="paper-list" class="paper-list"></div>
-          </div>
-
-          <div class="detail-column panel">
-            <div id="detail-empty" class="empty-state">
-              <h3>选择一篇论文开始查看</h3>
-              <p>上传成功后，左侧会出现任务卡片。点击任意论文，即可进入解析、审稿和双栏对应查看页面。</p>
+        <section id="main-tab-history" class="main-tab-panel">
+          <section class="workspace">
+            <div class="papers-column panel">
+              <div class="panel-head">
+                <h2>论文任务</h2>
+                <button id="refresh-btn" class="ghost">刷新</button>
+              </div>
+              <div id="paper-list" class="paper-list"></div>
             </div>
 
-            <div id="paper-detail" class="paper-detail hidden">
-              <div class="detail-header">
-                <div class="detail-heading">
-                  <p id="paper-meta-line" class="eyebrow"></p>
-                  <h2 id="paper-title"></h2>
-                </div>
+            <div class="detail-column panel">
+              <div id="detail-empty" class="empty-state">
+                <h3>选择一篇论文开始查看</h3>
+                <p>上传成功后，左侧会出现任务卡片。点击任意论文，即可进入解析、审稿和双栏对应查看页面。</p>
+              </div>
+
+              <div id="paper-detail" class="paper-detail hidden">
+                <div class="detail-header">
+                  <div class="detail-heading">
+                    <p id="paper-meta-line" class="eyebrow"></p>
+                    <h2 id="paper-title"></h2>
+                  </div>
                 <div class="detail-actions">
+                  <button id="edit-title-btn" class="ghost">编辑标题</button>
                   <button id="reparse-btn" class="ghost">重新解析</button>
                   <button id="review-btn" class="primary">开始审稿</button>
                   <button id="export-md-btn" class="secondary">导出 Markdown</button>
                   <button id="export-pdf-btn" class="secondary">导出 PDF</button>
                   <button id="export-docx-btn" class="secondary">导出 Word 批注版</button>
-                  <button id="delete-btn" class="danger">删除任务</button>
+                    <button id="delete-btn" class="danger">删除任务</button>
+                  </div>
                 </div>
-              </div>
 
-              <div class="tab-bar">
-                <button class="tab active" data-tab="overview">总览</button>
-                <button class="tab" data-tab="parsed">解析视图</button>
-                <button class="tab" data-tab="review">审稿报告</button>
-                <button class="tab" data-tab="mapping">论文与意见对应</button>
-              </div>
+                <div class="tab-bar">
+                  <button class="tab active" data-tab="overview">总览</button>
+                  <button class="tab" data-tab="parsed">解析视图</button>
+                  <button class="tab" data-tab="review">审稿报告</button>
+                  <button class="tab" data-tab="mapping">论文与意见对应</button>
+                </div>
 
-              <section id="tab-overview" class="tab-panel active"></section>
-              <section id="tab-parsed" class="tab-panel"></section>
-              <section id="tab-review" class="tab-panel"></section>
-              <section id="tab-mapping" class="tab-panel"></section>
+                <section id="tab-overview" class="tab-panel active"></section>
+                <section id="tab-parsed" class="tab-panel"></section>
+                <section id="tab-review" class="tab-panel"></section>
+                <section id="tab-mapping" class="tab-panel"></section>
+              </div>
             </div>
-          </div>
+          </section>
         </section>
       </main>
     </div>
@@ -153,6 +144,23 @@
         <div class="modal-actions">
           <button type="button" class="ghost" id="review-rules-clear-btn">清空选择</button>
           <button type="button" class="secondary" id="review-rules-save-btn">应用规则</button>
+        </div>
+      </div>
+    </div>
+    <div id="export-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-export-modal></div>
+      <div class="modal-card export-modal-card" role="dialog" aria-modal="true" aria-labelledby="export-modal-title">
+        <div class="panel-head modal-head">
+          <div>
+            <h3 id="export-modal-title">选择导出格式</h3>
+            <p class="muted">选择需要导出的文本类型。</p>
+          </div>
+          <button type="button" class="ghost modal-close" data-close-export-modal>关闭</button>
+        </div>
+        <div class="export-modal-options">
+          <button type="button" class="secondary" id="export-modal-md-btn">导出 Markdown</button>
+          <button type="button" class="secondary" id="export-modal-pdf-btn">导出 PDF</button>
+          <button type="button" class="secondary" id="export-modal-docx-btn">导出 Word 批注版</button>
         </div>
       </div>
     </div>

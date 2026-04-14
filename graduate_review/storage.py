@@ -5,7 +5,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from .utils import ensure_dir, new_id, now_iso, read_json, write_json
+from .utils import clean_text, ensure_dir, new_id, now_iso, read_json, write_json
 
 
 DEFAULT_SETTINGS = {
@@ -86,7 +86,7 @@ class Storage:
 
             metadata = {
                 "id": paper_id,
-                "title": title,
+                "title": title or "正在识别标题…",
                 "degree_type": degree_type,
                 "review_mode": review_mode,
                 "original_filename": original_filename,

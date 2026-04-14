@@ -89,7 +89,7 @@ async def overview() -> JSONResponse:
 
 @app.post("/api/papers")
 async def upload_paper(
-    title: str = Form(...),
+    title: str = Form(""),
     degree_type: str = Form(...),
     review_mode: str = Form(...),
     file: UploadFile = File(...),
@@ -147,6 +147,23 @@ async def review_paper(paper_id: str, payload: dict[str, Any]) -> JSONResponse:
         builtin_rule_ids=payload.get("builtin_rule_ids"),
     )
     return JSONResponse({"ok": True})
+
+
+@app.patch("/api/papers/{paper_id}")
+async def update_paper(paper_id: str, payload: dict[str, Any]) -> JSONResponse:
+    metadata = storage.read_paper_metadata(paper_id)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="Paper not found.")
+    updates: dict[str, Any] = {}
+    if "title" in payload:
+        title = clean_text(str(payload.get("title", "")))
+        if not title:
+            raise HTTPException(status_code=400, detail="论文标题不能为空。")
+        updates["title"] = title
+    if not updates:
+        raise HTTPException(status_code=400, detail="没有可更新的字段。")
+    updated = storage.update_paper_metadata(paper_id, **updates)
+    return JSONResponse(updated)
 
 
 @app.delete("/api/papers/{paper_id}")

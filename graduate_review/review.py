@@ -11,13 +11,10 @@ from .utils import clean_text, new_id, now_iso, truncate
 
 
 DIMENSIONS = [
-    "论文概括",
-    "章节设置",
-    "论述逻辑",
-    "标题匹配",
-    "实验与测试",
-    "工作量",
-    "语言表达",
+    {"name": "创新意识", "max_score": 30},
+    {"name": "实现质量", "max_score": 30},
+    {"name": "撰写质量", "max_score": 20},
+    {"name": "逻辑结构", "max_score": 20},
 ]
 
 ProgressCallback = Callable[[str], None]
@@ -223,6 +220,22 @@ def _notify_progress(callback: ProgressCallback | None, message: str) -> None:
 
 def _chunk_sections(parsed: dict[str, Any], mode: str) -> list[dict[str, Any]]:
     section_map = {section["id"]: section for section in parsed.get("sections", [])}
+    child_map: dict[str, list[str]] = {}
+    for section in parsed.get("sections", []):
+        parent_id = section.get("parent_id")
+        if parent_id:
+            child_map.setdefault(parent_id, []).append(section["id"])
+
+    def descendant_section_ids(section_id: str) -> list[str]:
+        collected: list[str] = []
+        stack = [section_id]
+        while stack:
+            current_id = stack.pop()
+            collected.append(current_id)
+            children = child_map.get(current_id, [])
+            stack.extend(reversed(children))
+        return collected
+
     paragraphs_by_section: dict[str, list[dict[str, Any]]] = {}
     for paragraph in parsed.get("paragraphs", []):
         paragraphs_by_section.setdefault(paragraph["section_id"], []).append(paragraph)
@@ -247,8 +260,7 @@ def _chunk_sections(parsed: dict[str, Any], mode: str) -> list[dict[str, Any]]:
     paragraph_limit = 12 if mode == "快速审稿" else 24
     for section in top_sections:
         section_id = section["id"]
-        child_ids = [child["id"] for child in parsed.get("sections", []) if child.get("parent_id") == section_id]
-        relevant_section_ids = [section_id] + child_ids
+        relevant_section_ids = [sec_id for sec_id in descendant_section_ids(section_id) if sec_id in section_map]
         paragraphs = [
             paragraph
             for sec_id in relevant_section_ids
@@ -484,8 +496,18 @@ async def _model_review(
             "role": "user",
             "content": (
                 "请综合以下分章审稿摘要并生成最终总评。\n"
-                "分值范围固定为 0-10，6 分以下不合格。逐章评价和详细问题清单已由系统保存，本次不要重复生成它们。"
-                "请重点给出：论文内容概括、整体评价、各维度分数、总分、是否通过、用户规则命中概述、硕士论文创新点评价。"
+                "请按本科毕业论文送审口径给出客观结论。避免使用“成功”“完整”“完备”等容易夸大工作量或完成度的词。"
+                "逐章评价和详细问题清单已由系统保存，本次不要重复生成它们。"
+                "summary 只写一句话，用于概括论文主要工作。"
+                "general_assessment 请写成一段 4 句左右的总评，内容顺序固定为："
+                "1）客观点明研究内容划分是否合理；"
+                "2）客观点明研究内容完成程度以及能否支撑论文标题；"
+                "3）概括论文最主要的不足；"
+                "4）最后一句明确说明该工作是否达到参加毕业答辩的资格。"
+                "dimension_scores 只允许以下 4 项，并严格使用这些名称："
+                "创新意识（0-30）、实现质量（0-30）、撰写质量（0-20）、逻辑结构（0-20）。"
+                "total_score 为四项之和，总分 100；总分小于 70 分判定为不合格，否则为合格。"
+                "请重点给出：论文内容概括、整体评价、四项分数、总分、是否通过、用户规则命中概述、硕士论文创新点评价。"
                 "返回 JSON 格式："
                 '{"summary":"","general_assessment":"","dimension_scores":[{"name":"","score":0}],"total_score":0,"pass":true,"rule_hits":[""],"innovation":{"points":[""],"assessment":""}}'
                 f"\n论文类型：{metadata.get('degree_type')}。\n"
@@ -536,15 +558,24 @@ async def _model_review(
 
 
 def _normalize_review(review: dict[str, Any]) -> dict[str, Any]:
-    review["dimension_scores"] = [
-        {"name": item.get("name", f"维度{index + 1}"), "score": float(item.get("score", 0))}
-        for index, item in enumerate(review.get("dimension_scores", []))
-    ]
-    if "total_score" in review:
+    raw_dimension_scores = review.get("dimension_scores", [])
+    score_by_name: dict[str, float] = {}
+    for item in raw_dimension_scores:
         try:
-            review["total_score"] = round(float(review["total_score"]), 1)
+            score_by_name[str(item.get("name", "")).strip()] = float(item.get("score", 0))
         except Exception:
-            review["total_score"] = 0.0
+            continue
+    normalized_dimension_scores = []
+    total_score = 0.0
+    for dimension in DIMENSIONS:
+        name = dimension["name"]
+        max_score = float(dimension["max_score"])
+        score = round(min(max(score_by_name.get(name, 0.0), 0.0), max_score), 1)
+        normalized_dimension_scores.append({"name": name, "score": score, "max_score": int(max_score)})
+        total_score += score
+    review["dimension_scores"] = normalized_dimension_scores
+    review["total_score"] = round(total_score, 1)
+    review["pass"] = review["total_score"] >= 70
     review["chapter_reviews"] = [
         {
             "section_id": item.get("section_id", ""),

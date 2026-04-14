@@ -1,4 +1,5 @@
 const state = {
+  mainTab: "review",
   overview: null,
   selectedPaperId: null,
   selectedPaper: null,
@@ -42,6 +43,7 @@ const settingsForm = document.getElementById("settings-form");
 const paperListEl = document.getElementById("paper-list");
 const ruleListEl = document.getElementById("rule-list");
 const heroStatsEl = document.getElementById("hero-stats");
+const reviewStageEl = document.getElementById("review-stage");
 const detailEmptyEl = document.getElementById("detail-empty");
 const paperDetailEl = document.getElementById("paper-detail");
 const paperTitleEl = document.getElementById("paper-title");
@@ -53,11 +55,12 @@ const tabMappingEl = document.getElementById("tab-mapping");
 const refreshBtn = document.getElementById("refresh-btn");
 const reviewBtn = document.getElementById("review-btn");
 const reparseBtn = document.getElementById("reparse-btn");
+const editTitleBtn = document.getElementById("edit-title-btn");
 const exportMarkdownBtn = document.getElementById("export-md-btn");
 const exportPdfBtn = document.getElementById("export-pdf-btn");
 const exportDocxBtn = document.getElementById("export-docx-btn");
 const deleteBtn = document.getElementById("delete-btn");
-const homeBtn = document.getElementById("home-btn");
+const homeTitleBtn = document.getElementById("home-title-btn");
 const settingsBtn = document.getElementById("settings-btn");
 const settingsModalEl = document.getElementById("settings-modal");
 const settingsTabsEl = document.getElementById("settings-tabs");
@@ -73,6 +76,11 @@ const reviewRulesModalMetaEl = document.getElementById("review-rules-modal-meta"
 const reviewRulesModalBodyEl = document.getElementById("review-rules-modal-body");
 const reviewRulesClearBtn = document.getElementById("review-rules-clear-btn");
 const reviewRulesSaveBtn = document.getElementById("review-rules-save-btn");
+const exportModalEl = document.getElementById("export-modal");
+const exportModalMarkdownBtn = document.getElementById("export-modal-md-btn");
+const exportModalPdfBtn = document.getElementById("export-modal-pdf-btn");
+const exportModalDocxBtn = document.getElementById("export-modal-docx-btn");
+const mainTabButtons = Array.from(document.querySelectorAll("[data-main-tab]"));
 
 function settingsField(name) {
   return settingsForm.querySelector(`[name="${name}"]`);
@@ -250,15 +258,19 @@ async function loadOverview(preserveSelection = true) {
     state.selectedPaperId = null;
     state.selectedPaper = null;
   }
-  renderSidebar();
+  renderRules();
+  renderSettings();
   renderHero();
+  renderMainTabs();
   renderPapers();
+  renderReviewStage();
 
   if (state.selectedPaperId && preserveSelection) {
     await loadPaper(state.selectedPaperId);
   } else {
     state.selectedPaperId = null;
     state.selectedPaper = null;
+    renderReviewStage();
     renderPaperDetail();
   }
 }
@@ -270,7 +282,17 @@ async function loadPaper(paperId) {
   state.selectedPaper = await request(`/api/papers/${paperId}`);
   ensureReviewDraft(paperId);
   renderPapers();
+  renderReviewStage();
   renderPaperDetail();
+}
+
+function renderMainTabs() {
+  mainTabButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.mainTab === state.mainTab);
+  });
+  document.querySelectorAll(".main-tab-panel").forEach((panel) => {
+    panel.classList.toggle("active", panel.id === `main-tab-${state.mainTab}`);
+  });
 }
 
 function renderHero() {
@@ -291,11 +313,6 @@ function renderHero() {
       <strong>${rules}</strong>
     </article>
   `;
-}
-
-function renderSidebar() {
-  renderRules();
-  renderSettings();
 }
 
 function renderRules() {
@@ -434,6 +451,201 @@ function renderPapers() {
       `;
     })
     .join("");
+}
+
+function reviewStageActionButtons(metadata) {
+  const canExport = metadata.review_status === "done";
+  return `
+    <div class="review-stage-toolbar">
+      <div class="review-stage-actions review-stage-actions-left">
+        <button type="button" class="ghost review-stage-tool-button" data-review-home-action="edit-title">编辑标题</button>
+        <button type="button" class="ghost review-stage-tool-button" data-review-home-action="reparse">重新解析</button>
+        <button type="button" class="primary review-stage-tool-button" data-review-home-action="review">开始审稿</button>
+        <button type="button" class="danger review-stage-tool-button" data-review-home-action="delete">删除任务</button>
+      </div>
+      <div class="review-stage-actions review-stage-actions-right">
+        <button type="button" class="secondary review-stage-tool-button" data-review-home-action="open-export" ${canExport ? "" : "disabled"}>导出</button>
+      </div>
+    </div>
+  `;
+}
+
+function reviewStageNavTabs() {
+  const tabs = [
+    ["overview", "总览"],
+    ["parsed", "解析视图"],
+    ["review", "审稿报告"],
+    ["mapping", "论文与意见对应"],
+  ];
+  return `
+    <div class="review-stage-tabbar" role="tablist" aria-label="论文详情导航">
+      ${tabs
+        .map(
+          ([key, label]) => `
+            <button
+              type="button"
+              class="review-stage-nav-tab ${state.activeTab === key ? "active" : ""}"
+              data-review-stage-tab="${key}"
+              role="tab"
+              aria-selected="${state.activeTab === key ? "true" : "false"}"
+            >${label}</button>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+async function editPaperTitle() {
+  if (!state.selectedPaperId || !state.selectedPaper?.metadata) return;
+  const currentTitle = state.selectedPaper.metadata.title || "";
+  const nextTitle = window.prompt("请输入新的论文标题", currentTitle);
+  if (nextTitle === null) return;
+  const title = nextTitle.trim();
+  if (!title) {
+    showToast("论文标题不能为空。");
+    return;
+  }
+  await request(`/api/papers/${state.selectedPaperId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  showToast("论文标题已更新。");
+  await loadOverview();
+}
+
+function renderReviewStage() {
+  if (!state.selectedPaper) {
+    reviewStageEl.classList.add("hidden");
+    reviewStageEl.innerHTML = "";
+    return;
+  }
+  const { metadata, parsed = {}, review = {} } = state.selectedPaper;
+  ensureReviewDraft(metadata.id);
+  const selectedBuiltin = selectedBuiltinRules();
+  const selectedRules = selectedReviewRules();
+  const reviewStatus = metadata.review_status === "idle" ? metadata.parse_status : metadata.review_status;
+  const hasScores = (review.dimension_scores || []).length > 0;
+  const showScoreOverview = metadata.review_status === "done" && hasScores;
+  reviewStageEl.classList.remove("hidden");
+  reviewStageEl.innerHTML = `
+    <article class="panel review-stage-card">
+      <div class="review-stage-head">
+        <div>
+          <p class="eyebrow">${escapeHtml(metadata.degree_type)} · ${escapeHtml(metadata.review_mode)} · ${escapeHtml(combinedStatus(metadata))}</p>
+          <h2>${escapeHtml(metadata.title || "正在识别标题…")}</h2>
+          <p class="muted">${escapeHtml(metadata.status_message || "")}</p>
+        </div>
+        <span class="status-pill ${statusClass(reviewStatus)}">${escapeHtml(combinedStatus(metadata))}</span>
+      </div>
+      ${reviewStageActionButtons(metadata)}
+      ${reviewStageNavTabs()}
+      <div class="review-stage-grid">
+        <article class="review-stage-block">
+          <h3>审核进度</h3>
+          <p><strong>解析状态：</strong>${escapeHtml(metadata.parse_status)}</p>
+          <p><strong>审稿状态：</strong>${escapeHtml(metadata.review_status)}</p>
+          <p><strong>当前提示：</strong>${escapeHtml(metadata.status_message || "等待开始")}</p>
+          <p><strong>错误信息：</strong>${escapeHtml(metadata.last_error || "无")}</p>
+          <p><strong>警告信息：</strong>${escapeHtml(metadata.last_warning || "无")}</p>
+        </article>
+        <article class="review-stage-block">
+          <h3>${showScoreOverview ? "评分概览" : "搜索结果"}</h3>
+          ${
+            showScoreOverview
+              ? `
+                <div class="score-summary review-home-score-summary">
+                  <div class="score-summary-total">
+                    <small>总评分</small>
+                    <strong>${review.total_score ?? "-"}</strong>
+                    <span class="score-result ${review.pass ? "pass" : "fail"}">${review.pass ? "合格" : "不合格"}</span>
+                  </div>
+                  <div class="score-summary-list">
+                    ${(review.dimension_scores || [])
+                      .map(
+                        (item) => `
+                          <div class="score-summary-item">
+                            <span>${escapeHtml(item.name)}</span>
+                            <strong>${item.score}</strong>
+                          </div>
+                        `
+                      )
+                      .join("")}
+                  </div>
+                </div>
+              `
+              : `
+                <p><strong>章节数：</strong>${parsed.stats?.section_count ?? 0}</p>
+                <p><strong>段落数：</strong>${parsed.stats?.paragraph_count ?? 0}</p>
+                <p><strong>表格数：</strong>${parsed.stats?.table_count ?? 0}</p>
+                <p><strong>图片数：</strong>${parsed.stats?.image_count ?? 0}</p>
+              `
+          }
+        </article>
+        <article class="review-stage-block review-stage-rules">
+          <div class="panel-head review-rule-head">
+            <div>
+              <h3>审稿规则</h3>
+              <p class="muted">系统规则支持人工勾选，当前选择会用于本次 ${escapeHtml(state.reviewDraft.mode)}。</p>
+            </div>
+            <button type="button" class="ghost" data-open-review-rules>勾选规则</button>
+          </div>
+          <label>
+            <span>本次审稿模式</span>
+            <select id="review-stage-mode">
+              <option value="快速审稿" ${state.reviewDraft.mode === "快速审稿" ? "selected" : ""}>快速审稿</option>
+              <option value="深度审稿" ${state.reviewDraft.mode === "深度审稿" ? "selected" : ""}>深度审稿</option>
+            </select>
+          </label>
+          <div class="rule-section-block">
+            <div class="rule-section-title">已选系统规则</div>
+            <div class="selected-rule-list">
+              ${selectedBuiltin.length
+                ? selectedBuiltin.map((rule) => `<span class="selected-rule-chip">${escapeHtml(rule.title)}</span>`).join("")
+                : `<p class="muted">当前未选择系统默认规则。</p>`}
+            </div>
+          </div>
+          <div class="rule-section-block">
+            <div class="rule-section-title">已选自定义规则</div>
+            <div class="selected-rule-list">
+              ${selectedRules.length
+                ? selectedRules.map((rule) => `<span class="selected-rule-chip">${escapeHtml(rule.name)}</span>`).join("")
+                : `<p class="muted">当前未选择自定义规则。</p>`}
+            </div>
+          </div>
+        </article>
+      </div>
+      <article class="review-stage-block review-stage-summary">
+        <h3>当前报告摘要</h3>
+        ${review.generation_mode === "failed"
+          ? `<p><strong>审稿失败：</strong>${escapeHtml(review.error_message || metadata.last_error || "模型调用失败。")}</p>`
+          : `<p>${escapeHtml(review.summary || "上传后会先解析结构；开始审稿后，这里会展示当前报告摘要和评分结果。")}</p>`}
+        ${hasScores
+          ? `
+            <div class="review-stage-scoreline">
+              <strong>总评分 ${review.total_score ?? "-"}</strong>
+              <span class="score-result ${review.pass ? "pass" : "fail"}">${review.pass ? "合格" : "不合格"}</span>
+            </div>
+          `
+          : ""}
+      </article>
+    </article>
+  `;
+}
+
+function openExportModal() {
+  const canExport = state.selectedPaper?.metadata?.review_status === "done";
+  exportModalMarkdownBtn.disabled = !canExport;
+  exportModalPdfBtn.disabled = !canExport;
+  exportModalDocxBtn.disabled = !canExport;
+  exportModalEl.classList.remove("hidden");
+  exportModalEl.setAttribute("aria-hidden", "false");
+}
+
+function closeExportModal() {
+  exportModalEl.classList.add("hidden");
+  exportModalEl.setAttribute("aria-hidden", "true");
 }
 
 function renderPaperDetail() {
@@ -731,9 +943,94 @@ function renderParsedTab() {
   `;
 }
 
+function chapterRootSections(parsed) {
+  const sections = parsed.sections || [];
+  function isBodyRoot(section) {
+    if (section.level !== 1) return false;
+    const number = String(section.number || "").trim();
+    const title = String(section.title || "").trim();
+    return /^\d+(\.\d+)?$/.test(number) || /^第.+章/.test(number) || /^第.+章/.test(title);
+  }
+  return sections
+    .filter((section) => isBodyRoot(section))
+    .sort((left, right) => {
+      const leftNumber = parseInt(String(left.number || left.title || "").match(/\d+/)?.[0] || "0", 10);
+      const rightNumber = parseInt(String(right.number || right.title || "").match(/\d+/)?.[0] || "0", 10);
+      return leftNumber - rightNumber;
+    });
+}
+
+function pageLocationLabel(locationLabel = "") {
+  const match = String(locationLabel).match(/第\d+页/);
+  return match ? match[0] : "页码待确认";
+}
+
+function conciseIssueText(issue) {
+  return truncateText(issue.analysis || issue.suggestion || issue.title || "存在需要修改的问题。", 96);
+}
+
+function buildReviewChapterModules(parsed, review) {
+  const sections = parsed.sections || [];
+  const sectionMap = new Map(sections.map((section) => [section.id, section]));
+  const paragraphMap = new Map((parsed.paragraphs || []).map((paragraph) => [paragraph.id, paragraph]));
+  const chapterRoots = chapterRootSections(parsed);
+  const chapterRootIds = new Set(chapterRoots.map((section) => section.id));
+  const chapterReviewMap = new Map((review.chapter_reviews || []).map((chapter) => [chapter.section_id, chapter]));
+
+  function topLevelSectionId(sectionId) {
+    let current = sectionMap.get(sectionId);
+    while (current && current.parent_id) {
+      current = sectionMap.get(current.parent_id);
+    }
+    return current?.id || sectionId;
+  }
+
+  function issueChapterRoot(issue) {
+    const targetIds = issue.target_ids || {};
+    const paragraphId = (targetIds.paragraph_ids || [])[0];
+    const explicitSectionId = (targetIds.section_ids || [])[0];
+    const sectionId = paragraphId ? paragraphMap.get(paragraphId)?.section_id || explicitSectionId : explicitSectionId;
+    if (!sectionId) return null;
+    const rootId = topLevelSectionId(sectionId);
+    return chapterRootIds.has(rootId) ? rootId : null;
+  }
+
+  const issuesByRoot = new Map(chapterRoots.map((section) => [section.id, []]));
+  const otherIssues = [];
+  (review.issues || []).forEach((issue) => {
+    const rootId = issueChapterRoot(issue);
+    if (rootId && issuesByRoot.has(rootId)) {
+      issuesByRoot.get(rootId).push(issue);
+    } else {
+      otherIssues.push(issue);
+    }
+  });
+
+  const chapterModules = chapterRoots.map((section) => ({
+    key: section.id,
+    title: section.title,
+    summary:
+      chapterReviewMap.get(section.id)?.assessment ||
+      (issuesByRoot.get(section.id)?.length ? "本章存在需要集中修改的问题，建议优先核对论述内容、结构衔接与实验支撑。" : "本章暂未识别到需要单独列示的核心问题。"),
+    issues: (issuesByRoot.get(section.id) || []).sort((left, right) => (left.location_label || "").localeCompare(right.location_label || "", "zh-CN")),
+  }));
+
+  chapterModules.push({
+    key: "__others__",
+    title: "其他篇章",
+    summary: otherIssues.length
+      ? "本模块汇总前置信息、摘要、关键词、参考文献等非正文篇章中的问题。"
+      : "其他篇章暂未识别到需要单独列示的问题。",
+    issues: otherIssues.sort((left, right) => (left.location_label || "").localeCompare(right.location_label || "", "zh-CN")),
+  });
+
+  return chapterModules;
+}
+
 function renderReviewTab() {
   const review = state.selectedPaper.review || {};
   const metadata = state.selectedPaper.metadata || {};
+  const parsed = state.selectedPaper.parsed || {};
   if (!review || !Object.keys(review).length) {
     tabReviewEl.innerHTML = `<div class="empty-state"><div><h3>还没有审稿报告</h3><p>解析完成后，点击上方“开始审稿”即可生成报告。当前版本必须使用已配置的 LLM 接口，若配置缺失或调用失败，会直接给出错误信息。</p></div></div>`;
     return;
@@ -764,6 +1061,8 @@ function renderReviewTab() {
     `;
     return;
   }
+  const chapterModules = buildReviewChapterModules(parsed, review);
+  const totalColorClass = review.pass ? "pass" : "fail";
   tabReviewEl.innerHTML = `
     <div class="parsed-grid">
       ${(review.generation_mode && review.generation_mode !== "model") ? `
@@ -772,50 +1071,58 @@ function renderReviewTab() {
           <p>这份报告不是当前模型审稿流程生成的结果，建议重新发起一次审稿。</p>
         </article>
       ` : ""}
-      <article class="block-card">
-        <h4>总评</h4>
-        <p>${escapeHtml(review.general_assessment || "")}</p>
-        <p><strong>摘要：</strong>${escapeHtml(review.summary || "")}</p>
+      <article class="block-card review-report-conclusion">
+        <h4>第一部分 总评结论</h4>
+        <p class="report-summary-line">${escapeHtml(review.summary || "该论文围绕给定题目展开了毕业设计相关研究与实现工作。")}</p>
+        <p>${escapeHtml(review.general_assessment || "当前尚未生成总评结论。")}</p>
+        <p class="report-verdict-line ${totalColorClass}">
+          ${review.pass ? "结论：该工作已达到参加毕业答辩的基本要求。" : "结论：该工作目前尚未达到参加毕业答辩的基本要求。"}
+        </p>
         <small>生成时间：${formatTime(review.generated_at)} · 来源：${escapeHtml(review.provider || "-")}</small>
       </article>
-      <section class="score-grid">
-        <article class="score-card">
-          <small>总分</small>
-          <strong>${review.total_score ?? "-"}</strong>
-          <span>${review.pass ? "达到及格线" : "低于 6 分，不合格"}</span>
+      <article class="block-card review-report-scores">
+        <h4>第二部分 评分</h4>
+        <div class="review-total-score ${totalColorClass}">
+          <small>总评分</small>
+          <strong>${review.total_score ?? 0}/100</strong>
+          <span>${review.pass ? "合格" : "不合格"}</span>
+        </div>
+        <section class="review-dimension-grid">
+          ${(review.dimension_scores || []).map((item) => `
+            <article class="score-card review-dimension-card">
+              <small>${escapeHtml(item.name)}</small>
+              <strong>${item.score}/${item.max_score ?? 0}</strong>
+            </article>
+          `).join("")}
+        </section>
+      </article>
+      <section class="chapter-list review-chapter-modules">
+        <article class="block-card review-report-section-title">
+          <h4>第三部分 分章具体意见</h4>
+          <p class="muted">正文第 1 章到第 N 章分别单独展示，其他非正文篇章统一归入“其他篇章”。</p>
         </article>
-        ${(review.dimension_scores || []).map((item) => `
-          <article class="score-card">
-            <small>${escapeHtml(item.name)}</small>
-            <strong>${item.score}</strong>
+        ${chapterModules.map((chapter) => `
+          <article class="chapter-card review-chapter-module">
+            <h3>${escapeHtml(chapter.title)}</h3>
+            <p class="chapter-assessment">${escapeHtml(chapter.summary || "本模块暂无总评。")}</p>
+            ${chapter.issues.length
+              ? `
+                <ul class="chapter-issue-list">
+                  ${chapter.issues.map((issue) => `
+                    <li class="chapter-issue-item">
+                      <div class="chapter-issue-meta">
+                        <strong>${escapeHtml(pageLocationLabel(issue.location_label))}</strong>
+                        <span>${escapeHtml(issue.location_label || "位置待确认")}</span>
+                      </div>
+                      ${issue.evidence ? `<p class="chapter-issue-evidence"><strong>原文：</strong>${escapeHtml(issue.evidence)}</p>` : ""}
+                      <p class="chapter-issue-analysis"><strong>问题说明：</strong>${escapeHtml(conciseIssueText(issue))}</p>
+                    </li>
+                  `).join("")}
+                </ul>
+              `
+              : `<p class="muted">当前没有需要单独列示的问题。</p>`}
           </article>
         `).join("")}
-      </section>
-      <section class="chapter-list">
-        ${(review.chapter_reviews || []).length ? review.chapter_reviews.map((chapter) => `
-          <article class="chapter-card">
-            <h3>${escapeHtml(chapter.title)}</h3>
-            <p>${escapeHtml(chapter.assessment || "")}</p>
-          </article>
-        `).join("") : ""}
-      </section>
-      <section class="issue-list">
-        ${(review.issues || []).length ? review.issues.map((issue) => `
-          <article class="issue-card ${state.selectedIssueId === issue.id ? "active" : ""}" data-issue-card="${issue.id}">
-            <div class="panel-head">
-              <div>
-                <h3>${escapeHtml(issue.title)}</h3>
-                <small>${escapeHtml(issue.location_label || "")}</small>
-              </div>
-              <span class="status-pill ${issue.severity === "严重" ? "failed" : issue.severity === "重要" ? "running" : "done"}">${escapeHtml(issue.severity || "一般")}</span>
-            </div>
-            <p><strong>问题类型：</strong>${escapeHtml(issue.type || "")}</p>
-            ${issue.evidence ? `<p><strong>原文：</strong>${escapeHtml(issue.evidence)}</p>` : ""}
-            <p><strong>问题说明：</strong>${escapeHtml(issue.analysis || "")}</p>
-            <p><strong>修改建议：</strong>${escapeHtml(issue.suggestion || "")}</p>
-            ${issue.polish_suggestion ? `<p><strong>润色建议：</strong>${escapeHtml(issue.polish_suggestion)}</p>` : ""}
-          </article>
-        `).join("") : `<p class="muted">当前报告没有返回问题清单。</p>`}
       </section>
       ${review.innovation ? `
         <article class="block-card">
@@ -1133,6 +1440,7 @@ async function handlePaperSubmit(event) {
     method: "POST",
     body: formData,
   });
+  state.mainTab = "review";
   state.selectedPaperId = created.id;
   paperForm.reset();
   paperForm.querySelectorAll('input[type="file"]').forEach((input) => updateDropzoneFilename(input));
@@ -1352,6 +1660,7 @@ function applyReviewRuleSelection() {
   state.reviewDraft.ruleIds = checkedIds;
   state.reviewDraft.builtinRuleIds = checkedBuiltinIds;
   closeReviewRulesModal();
+  renderReviewStage();
   renderOverviewTab();
 }
 
@@ -1409,11 +1718,14 @@ async function deletePaper(paperId) {
 }
 
 async function goHome() {
+  state.mainTab = "review";
   state.selectedPaperId = null;
   state.selectedPaper = null;
   state.activeTab = "overview";
   state.selectedIssueId = null;
   state.activeMappingIssueId = null;
+  renderMainTabs();
+  renderReviewStage();
   await loadOverview(false);
   showToast("已返回首页。");
 }
@@ -1422,12 +1734,16 @@ function bindEvents() {
   paperForm.addEventListener("submit", (event) => handlePaperSubmit(event).catch((error) => showToast(error.message)));
   ruleForm.addEventListener("submit", (event) => handleRuleSubmit(event).catch((error) => showToast(error.message)));
   refreshBtn.addEventListener("click", () => loadOverview().catch((error) => showToast(error.message)));
+  editTitleBtn.addEventListener("click", () => editPaperTitle().catch((error) => showToast(error.message)));
   reviewBtn.addEventListener("click", () => triggerReview().catch((error) => showToast(error.message)));
   reparseBtn.addEventListener("click", () => triggerReparse().catch((error) => showToast(error.message)));
   exportMarkdownBtn.addEventListener("click", () => triggerExport("markdown").catch((error) => showToast(error.message)));
   exportPdfBtn.addEventListener("click", () => triggerExport("pdf").catch((error) => showToast(error.message)));
   exportDocxBtn.addEventListener("click", () => triggerExport("docx").catch((error) => showToast(error.message)));
-  homeBtn.addEventListener("click", () => goHome().catch((error) => showToast(error.message)));
+  exportModalMarkdownBtn.addEventListener("click", () => triggerExport("markdown").then(() => closeExportModal()).catch((error) => showToast(error.message)));
+  exportModalPdfBtn.addEventListener("click", () => triggerExport("pdf").then(() => closeExportModal()).catch((error) => showToast(error.message)));
+  exportModalDocxBtn.addEventListener("click", () => triggerExport("docx").then(() => closeExportModal()).catch((error) => showToast(error.message)));
+  homeTitleBtn.addEventListener("click", () => goHome().catch((error) => showToast(error.message)));
   settingsBtn.addEventListener("click", () => openSettingsModal());
   settingsSaveBtn.addEventListener("click", () => handleSettingsSubmit().catch((error) => showToast(error.message)));
   reviewRulesClearBtn.addEventListener("click", () => {
@@ -1444,6 +1760,13 @@ function bindEvents() {
   });
 
   document.body.addEventListener("click", (event) => {
+    const mainTabButton = event.target.closest("[data-main-tab]");
+    if (mainTabButton) {
+      state.mainTab = mainTabButton.dataset.mainTab;
+      renderMainTabs();
+      return;
+    }
+
     const tab = event.target.closest(".tab");
     if (tab) {
       state.activeTab = tab.dataset.tab;
@@ -1477,6 +1800,12 @@ function bindEvents() {
       return;
     }
 
+    const exportCloseButton = event.target.closest("[data-close-export-modal]");
+    if (exportCloseButton) {
+      closeExportModal();
+      return;
+    }
+
     const openRuleLibraryButton = event.target.closest("[data-open-rule-library]");
     if (openRuleLibraryButton) {
       renderRuleLibraryModal();
@@ -1486,6 +1815,34 @@ function bindEvents() {
     const openReviewRulesButton = event.target.closest("[data-open-review-rules]");
     if (openReviewRulesButton) {
       openReviewRulesModal();
+      return;
+    }
+
+    const reviewHomeAction = event.target.closest("[data-review-home-action]");
+    if (reviewHomeAction) {
+      const action = reviewHomeAction.dataset.reviewHomeAction;
+      if (action === "edit-title") {
+        editPaperTitle().catch((error) => showToast(error.message));
+      } else if (action === "reparse") {
+        triggerReparse().catch((error) => showToast(error.message));
+      } else if (action === "review") {
+        triggerReview().catch((error) => showToast(error.message));
+      } else if (action === "open-export") {
+        openExportModal();
+      } else if (action === "delete") {
+        if (state.selectedPaperId && window.confirm("确定要删除这篇论文任务及其解析/审稿结果吗？")) {
+          deletePaper(state.selectedPaperId).catch((error) => showToast(error.message));
+        }
+      }
+      return;
+    }
+
+    const reviewStageTab = event.target.closest("[data-review-stage-tab]");
+    if (reviewStageTab) {
+      state.mainTab = "history";
+      state.activeTab = reviewStageTab.dataset.reviewStageTab;
+      renderMainTabs();
+      renderPaperDetail();
       return;
     }
 
@@ -1546,6 +1903,14 @@ function bindEvents() {
     const reviewModeSelect = event.target.closest("#detail-review-mode");
     if (reviewModeSelect) {
       state.reviewDraft.mode = reviewModeSelect.value;
+      renderReviewStage();
+      return;
+    }
+
+    const reviewStageModeSelect = event.target.closest("#review-stage-mode");
+    if (reviewStageModeSelect) {
+      state.reviewDraft.mode = reviewStageModeSelect.value;
+      renderReviewStage();
     }
   });
 
@@ -1560,6 +1925,10 @@ function bindEvents() {
     }
     if (event.key === "Escape" && !reviewRulesModalEl.classList.contains("hidden")) {
       closeReviewRulesModal();
+      return;
+    }
+    if (event.key === "Escape" && !exportModalEl.classList.contains("hidden")) {
+      closeExportModal();
     }
   });
 }
