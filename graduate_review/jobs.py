@@ -23,15 +23,28 @@ class JobManager:
         self.logger.info("enqueue parse job paper_id=%s", paper_id)
         self._tasks[f"parse:{paper_id}"] = asyncio.create_task(self._run_parse(paper_id))
 
-    def enqueue_review(self, paper_id: str, *, review_mode: str | None = None, rule_ids: list[str] | None = None) -> None:
+    def enqueue_review(
+        self,
+        paper_id: str,
+        *,
+        review_mode: str | None = None,
+        rule_ids: list[str] | None = None,
+        builtin_rule_ids: list[str] | None = None,
+    ) -> None:
         self.logger.info(
-            "enqueue review job paper_id=%s review_mode=%s rule_count=%s",
+            "enqueue review job paper_id=%s review_mode=%s rule_count=%s builtin_rule_count=%s",
             paper_id,
             review_mode,
             len(rule_ids or []),
+            len(builtin_rule_ids or []),
         )
         self._tasks[f"review:{paper_id}"] = asyncio.create_task(
-            self._run_review(paper_id, review_mode=review_mode, rule_ids=rule_ids or [])
+            self._run_review(
+                paper_id,
+                review_mode=review_mode,
+                rule_ids=rule_ids or [],
+                builtin_rule_ids=builtin_rule_ids,
+            )
         )
 
     def cancel_tasks_for_paper(self, paper_id: str) -> None:
@@ -41,6 +54,13 @@ class JobManager:
             if task and not task.done():
                 task.cancel()
                 self.logger.info("cancelled %s job for paper_id=%s", prefix, paper_id)
+
+    def cancel_all_tasks(self) -> None:
+        for task_key, task in list(self._tasks.items()):
+            if task and not task.done():
+                task.cancel()
+                self.logger.info("cancelled job task_key=%s", task_key)
+        self._tasks.clear()
 
     def _progress_callback(self, paper_id: str, phase: str):
         def callback(message: str) -> None:
@@ -102,7 +122,14 @@ class JobManager:
         finally:
             self._tasks.pop(f"parse:{paper_id}", None)
 
-    async def _run_review(self, paper_id: str, *, review_mode: str | None, rule_ids: list[str]) -> None:
+    async def _run_review(
+        self,
+        paper_id: str,
+        *,
+        review_mode: str | None,
+        rule_ids: list[str],
+        builtin_rule_ids: list[str] | None,
+    ) -> None:
         self.logger.info("review started paper_id=%s requested_mode=%s", paper_id, review_mode)
         metadata = self.storage.read_paper_metadata(paper_id)
         if review_mode and review_mode != metadata.get("review_mode"):
@@ -113,7 +140,7 @@ class JobManager:
         self.storage.update_paper_metadata(
             paper_id,
             review_status="running",
-            status_message="正在准备百炼审稿任务",
+            status_message="正在准备模型审稿任务",
             last_error="",
             last_warning="",
         )
@@ -131,6 +158,7 @@ class JobManager:
                 parsed,
                 rules,
                 settings,
+                builtin_rule_ids=builtin_rule_ids,
                 data_root=self.storage.data_dir,
                 progress_callback=self._progress_callback(paper_id, "review"),
             )
@@ -139,7 +167,7 @@ class JobManager:
             self.storage.update_paper_metadata(
                 paper_id,
                 review_status="done",
-                status_message="审稿完成，已使用百炼模型生成报告",
+                status_message="审稿完成，已使用模型生成报告",
                 last_review_at=review.get("generated_at"),
                 last_error="",
                 last_warning="",
@@ -155,13 +183,13 @@ class JobManager:
             self.logger.warning("review cancelled paper_id=%s", paper_id)
             raise
         except Exception as exc:
-            provider = settings.get("llm", {}).get("provider", "dashscope-compatible")
+            provider = settings.get("llm", {}).get("provider", "openai-compatible")
             failure_review = {
                 "generated_at": now_iso(),
                 "mode": metadata.get("review_mode", "快速审稿"),
                 "provider": provider,
                 "generation_mode": "failed",
-                "generation_notes": [f"百炼审稿失败：{exc}"],
+                "generation_notes": [f"模型审稿失败：{exc}"],
                 "error_message": str(exc),
                 "summary": "",
                 "general_assessment": "",
@@ -177,7 +205,7 @@ class JobManager:
             self.storage.update_paper_metadata(
                 paper_id,
                 review_status="failed",
-                status_message="百炼审稿失败",
+                status_message="模型审稿失败",
                 last_error=str(exc),
                 last_warning="",
             )

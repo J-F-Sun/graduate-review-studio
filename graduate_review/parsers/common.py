@@ -24,11 +24,13 @@ COMMON_TOP_LEVEL = {
     "结论",
     "总结",
 }
+KEYWORD_SECTION_TITLES = {"关键词", "关键字", "keywords", "key words"}
+ACKNOWLEDGEMENT_TITLES = {"致谢", "acknowledgements", "acknowledgments"}
 INLINE_PREFACE_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"^(摘\s*要|摘要)\s*[：:]\s*(.+)$", re.IGNORECASE), "摘要"),
     (re.compile(r"^(abstract)\s*[：:]\s*(.+)$", re.IGNORECASE), "Abstract"),
     (re.compile(r"^(关\s*键\s*词|关键词|关键字)\s*[：:]\s*(.+)$", re.IGNORECASE), "关键词"),
-    (re.compile(r"^(keywords?)\s*[：:]\s*(.+)$", re.IGNORECASE), "Keywords"),
+    (re.compile(r"^(key\s*words?|keywords?)\s*[：:]\s*(.+)$", re.IGNORECASE), "Keywords"),
 ]
 
 
@@ -49,6 +51,36 @@ def split_inline_preface_heading(text: str) -> tuple[str, str] | None:
         if match:
             return normalized_title, clean_text(match.group(2))
     return None
+
+
+def is_keyword_section_title(text: str) -> bool:
+    return clean_text(text).lower() in KEYWORD_SECTION_TITLES
+
+
+def is_acknowledgement_title(text: str) -> bool:
+    return clean_text(text).lower() in ACKNOWLEDGEMENT_TITLES
+
+
+def looks_like_english_front_matter(text: str) -> bool:
+    stripped = clean_text(text)
+    lowered = stripped.lower()
+    if not stripped:
+        return False
+    if any(lowered.startswith(prefix) for prefix in ("abstract:", "abstract：", "keywords:", "keywords：", "key words:", "key words：")):
+        return False
+    if re.search(r"[\u4e00-\u9fff]", stripped):
+        return False
+    if len(stripped) > 180 or len(stripped) < 8:
+        return False
+    if any(mark in stripped for mark in "。！？；"):
+        return False
+    if any(token in lowered for token in ("school of", "department of", "college of", "university", "institute", "faculty of")):
+        return True
+    alpha_count = sum(1 for ch in stripped if ch.isalpha())
+    word_count = len(re.findall(r"[A-Za-z0-9][A-Za-z0-9\-()]*", stripped))
+    if alpha_count >= 20 and 4 <= word_count <= 24 and not stripped.endswith("."):
+        return True
+    return False
 
 
 def _looks_like_heading_candidate(text: str) -> bool:
@@ -194,6 +226,9 @@ class StructureBuilder:
     def _current_section(self) -> dict[str, Any]:
         active = self._ensure_default_section()
         return self._find_section(active.id)
+
+    def current_section_title(self) -> str:
+        return self._current_section().get("title", "")
 
     def _section_path_titles(self, section_id: str) -> list[str]:
         mapping = {section["id"]: section for section in self.sections}

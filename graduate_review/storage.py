@@ -205,6 +205,10 @@ class Storage:
         settings = self.read_settings()
         if "llm" in updates:
             settings["llm"] = settings["llm"] | updates["llm"]
+            settings["llm"]["vision_model"] = clean_text(str(settings["llm"].get("vision_model", "")))
+            from .llm import infer_provider
+
+            settings["llm"]["provider"] = infer_provider(settings["llm"])
         if "export" in updates:
             settings["export"] = settings["export"] | updates["export"]
         write_json(self.settings_path, settings)
@@ -231,7 +235,7 @@ class Storage:
                 review = review if isinstance(review, dict) else {}
                 review["generated_at"] = now_iso()
                 review["mode"] = metadata.get("review_mode", "快速审稿")
-                review["provider"] = review.get("provider") or self.read_settings()["llm"].get("provider", "dashscope-compatible")
+                review["provider"] = review.get("provider") or self.read_settings()["llm"].get("provider", "openai-compatible")
                 review["generation_mode"] = "terminated"
                 review["generation_notes"] = ["应用重启时检测到任务中断，当前报告已失效，请手动重新审稿。"]
                 review["error_message"] = "应用在审稿过程中重启，任务已中断。请点击“开始审稿”重新生成。"
@@ -258,3 +262,14 @@ class Storage:
             shutil.rmtree(paper_dir)
         export_path = self.exports_dir / f"{paper_id}.md"
         export_path.unlink(missing_ok=True)
+        (self.exports_dir / f"{paper_id}.pdf").unlink(missing_ok=True)
+        (self.exports_dir / f"{paper_id}.docx").unlink(missing_ok=True)
+
+    def clear_all_papers(self) -> None:
+        with self._lock:
+            if self.papers_dir.exists():
+                shutil.rmtree(self.papers_dir)
+            if self.exports_dir.exists():
+                shutil.rmtree(self.exports_dir)
+            self.papers_dir = ensure_dir(self.data_dir / "papers")
+            self.exports_dir = ensure_dir(self.data_dir / "exports")

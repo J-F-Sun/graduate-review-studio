@@ -11,7 +11,9 @@ from ..utils import clean_text, slugify, truncate
 from .common import (
     StructureBuilder,
     infer_heading_level,
+    is_keyword_section_title,
     looks_like_figure_caption,
+    looks_like_english_front_matter,
     looks_like_table_caption,
     split_inline_preface_heading,
 )
@@ -103,6 +105,10 @@ def parse_pdf(
                     "page": page_number,
                     "index": block_index,
                 }
+                if is_keyword_section_title(builder.current_section_title()) and looks_like_english_front_matter(block["text"]):
+                    builder.add_heading("英文摘要前置信息", 1, page_number=page_number, source_anchor=block_anchor)
+                    builder.add_paragraph(block["text"], role="body", page_number=page_number, source_anchor=block_anchor)
+                    continue
                 inline_heading = split_inline_preface_heading(block["text"])
                 if inline_heading:
                     heading_title, body = inline_heading

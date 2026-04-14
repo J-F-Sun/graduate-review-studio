@@ -91,6 +91,30 @@ def _issue_lines(issue: dict[str, Any], include_evidence: bool, include_polish: 
     return lines
 
 
+def _grouped_issues_by_title(issues: list[dict[str, Any]]) -> list[tuple[str, list[dict[str, Any]]]]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    order: list[str] = []
+    for issue in issues:
+        key = clean_text(issue.get("title", "")) or clean_text(issue.get("type", "")) or "未命名问题"
+        if key not in grouped:
+            order.append(key)
+        grouped[key].append(issue)
+    return [
+        (
+            key,
+            sorted(
+                grouped[key],
+                key=lambda item: (
+                    SEVERITY_ORDER.get(item.get("severity", "一般"), 99),
+                    item.get("location_label", ""),
+                    item.get("type", ""),
+                ),
+            ),
+        )
+        for key in order
+    ]
+
+
 def _severity_bucket(issues: list[dict[str, Any]], severity: str) -> list[dict[str, Any]]:
     return [issue for issue in issues if issue.get("severity", "一般") == severity]
 
@@ -175,17 +199,20 @@ def build_markdown_export(
 
     if export_settings.get("include_issue_list", True):
         lines.extend(["## 重点问题", ""])
-        for issue in context["issues"]:
-            lines.append(f"### {issue['title']}")
+        for issue_title, grouped_issues in _grouped_issues_by_title(context["issues"]):
+            lines.append(f"### {issue_title}")
             lines.append("")
-            lines.extend(
-                _issue_lines(
-                    issue,
-                    include_evidence=export_settings.get("include_evidence", True),
-                    include_polish=export_settings.get("include_polish_suggestions", True),
+            for issue in grouped_issues:
+                lines.append(f"#### {issue.get('location_label', '位置待确认')}")
+                lines.append("")
+                lines.extend(
+                    _issue_lines(
+                        issue,
+                        include_evidence=export_settings.get("include_evidence", True),
+                        include_polish=export_settings.get("include_polish_suggestions", True),
+                    )
                 )
-            )
-            lines.append("")
+                lines.append("")
 
     if export_settings.get("include_rule_hits", True):
         lines.extend(["## 规则命中情况", ""])

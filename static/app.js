@@ -3,6 +3,9 @@ const state = {
   selectedPaperId: null,
   selectedPaper: null,
   activeTab: "overview",
+  settingsModalOpen: false,
+  settingsTab: "appearance",
+  settingsDraftTheme: "paper",
   selectedIssueId: null,
   activeMappingIssueId: null,
   ruleLibraryOpen: false,
@@ -11,8 +14,10 @@ const state = {
     paperId: null,
     mode: "快速审稿",
     ruleIds: [],
+    builtinRuleIds: [],
   },
   reviewRuleDraftIds: [],
+  reviewBuiltinRuleDraftIds: [],
 };
 
 const THEME_STORAGE_KEY = "graduate-review-theme";
@@ -52,7 +57,12 @@ const exportMarkdownBtn = document.getElementById("export-md-btn");
 const exportPdfBtn = document.getElementById("export-pdf-btn");
 const exportDocxBtn = document.getElementById("export-docx-btn");
 const deleteBtn = document.getElementById("delete-btn");
-const themeOptionEls = Array.from(document.querySelectorAll("[data-theme-option]"));
+const homeBtn = document.getElementById("home-btn");
+const settingsBtn = document.getElementById("settings-btn");
+const settingsModalEl = document.getElementById("settings-modal");
+const settingsTabsEl = document.getElementById("settings-tabs");
+const settingsSaveBtn = document.getElementById("settings-save-btn");
+const settingsThemeOptionEls = Array.from(document.querySelectorAll("[data-settings-theme-option]"));
 const fileDropzoneEls = Array.from(document.querySelectorAll("[data-dropzone]"));
 const ruleModalEl = document.getElementById("rule-modal");
 const ruleModalTitleEl = document.getElementById("rule-modal-title");
@@ -63,6 +73,10 @@ const reviewRulesModalMetaEl = document.getElementById("review-rules-modal-meta"
 const reviewRulesModalBodyEl = document.getElementById("review-rules-modal-body");
 const reviewRulesClearBtn = document.getElementById("review-rules-clear-btn");
 const reviewRulesSaveBtn = document.getElementById("review-rules-save-btn");
+
+function settingsField(name) {
+  return settingsForm.querySelector(`[name="${name}"]`);
+}
 
 function showToast(message, timeout = 2600) {
   toastEl.textContent = message;
@@ -106,16 +120,21 @@ function builtinRules() {
 
 function ensureReviewDraft(paperId) {
   const availableRuleIds = new Set(enabledRules().map((rule) => rule.id));
+  const availableBuiltinRuleIds = new Set(builtinRules().map((rule) => rule.id));
   if (state.reviewDraft.paperId !== paperId) {
     const metadata = state.selectedPaper?.metadata || {};
     state.reviewDraft = {
       paperId,
       mode: metadata.review_mode || "快速审稿",
       ruleIds: enabledRules().map((rule) => rule.id),
+      builtinRuleIds: builtinRules().map((rule) => rule.id),
     };
     return;
   }
   state.reviewDraft.ruleIds = state.reviewDraft.ruleIds.filter((ruleId) => availableRuleIds.has(ruleId));
+  state.reviewDraft.builtinRuleIds = (state.reviewDraft.builtinRuleIds || []).filter((ruleId) =>
+    availableBuiltinRuleIds.has(ruleId)
+  );
 }
 
 function selectedReviewRules() {
@@ -123,12 +142,18 @@ function selectedReviewRules() {
   return enabledRules().filter((rule) => selectedIds.has(rule.id));
 }
 
+function selectedBuiltinRules() {
+  const selectedIds = new Set(state.reviewDraft.builtinRuleIds || []);
+  return builtinRules().filter((rule) => selectedIds.has(rule.id));
+}
+
+function currentTheme() {
+  return window.localStorage.getItem(THEME_STORAGE_KEY) || document.body.dataset.theme || "paper";
+}
+
 function applyTheme(theme) {
   const nextTheme = AVAILABLE_THEMES.has(theme) ? theme : "paper";
   document.body.dataset.theme = nextTheme;
-  themeOptionEls.forEach((button) => {
-    button.setAttribute("aria-pressed", button.dataset.themeOption === nextTheme ? "true" : "false");
-  });
   window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
 }
 
@@ -220,18 +245,20 @@ async function request(url, options = {}) {
 
 async function loadOverview(preserveSelection = true) {
   state.overview = await request("/api/overview");
+  const paperIds = new Set((state.overview.papers || []).map((paper) => paper.id));
+  if (!paperIds.has(state.selectedPaperId)) {
+    state.selectedPaperId = null;
+    state.selectedPaper = null;
+  }
   renderSidebar();
   renderHero();
   renderPapers();
 
-  if (!state.selectedPaperId && state.overview.papers.length) {
-    state.selectedPaperId = state.overview.papers[0].id;
-  }
   if (state.selectedPaperId && preserveSelection) {
     await loadPaper(state.selectedPaperId);
-  } else if (state.selectedPaperId && !preserveSelection) {
-    await loadPaper(state.selectedPaperId);
   } else {
+    state.selectedPaperId = null;
+    state.selectedPaper = null;
     renderPaperDetail();
   }
 }
@@ -274,38 +301,68 @@ function renderSidebar() {
 function renderRules() {
   const rules = state.overview?.rules || [];
   if (!rules.length) {
-    ruleListEl.innerHTML = `
-      <div class="rule-library-summary">
-        <p class="muted">还没有已保存规则。你可以先添加学院要求、老师关注点或格式规范。</p>
-        <button type="button" class="ghost" data-open-rule-library disabled>查看已有规则</button>
-      </div>
-    `;
-    closeRuleModal({ silent: true });
+    ruleListEl.innerHTML = `<p class="muted">还没有已保存规则。你可以先在上方创建一组规则。</p>`;
     return;
   }
-  const enabledCount = rules.filter((rule) => rule.enabled).length;
   ruleListEl.innerHTML = `
-    <div class="rule-library-summary">
-      <p>已保存 <strong>${rules.length}</strong> 个规则集，其中 <strong>${enabledCount}</strong> 个处于启用状态。</p>
-      <button type="button" class="ghost" data-open-rule-library>查看已有规则</button>
-    </div>
+    ${rules
+      .map(
+        (rule) => `
+          <article class="rule-card modal-rule-card">
+            <div class="rule-card-head">
+              <div>
+                <h3>${escapeHtml(rule.name)}</h3>
+                <div class="rule-card-meta">
+                  <span>${escapeHtml(formatRuleSource(rule.source_format))}</span>
+                  <span>${(rule.items || []).length} 条规则</span>
+                  <span>${formatTime(rule.updated_at)}</span>
+                </div>
+              </div>
+              <span class="status-pill ${rule.enabled ? "done" : ""}">${rule.enabled ? "已启用" : "未启用"}</span>
+            </div>
+            ${(rule.items || []).length
+              ? `
+                <div class="rule-modal-list">
+                  ${(rule.items || [])
+                    .map(
+                      (item, index) => `
+                        <article class="rule-modal-item">
+                          <strong>${index + 1}. ${escapeHtml(item.title || `规则 ${index + 1}`)}</strong>
+                          <div class="muted">${escapeHtml(item.body || "")}</div>
+                        </article>
+                      `
+                    )
+                    .join("")}
+                </div>
+              `
+              : `<p class="rule-preview">${escapeHtml(rule.content || "暂无规则内容。")}</p>`}
+            <div class="rule-card-actions">
+              <div class="rule-card-actions-left">
+                <button type="button" class="ghost action-button danger-button" data-delete-rule="${rule.id}">删除规则</button>
+              </div>
+              <label class="status-row">
+                <input type="checkbox" data-rule-toggle="${rule.id}" ${rule.enabled ? "checked" : ""} />
+                <span>启用此规则</span>
+              </label>
+            </div>
+          </article>
+        `
+      )
+      .join("")}
   `;
-  if (state.ruleLibraryOpen) {
-    renderRuleLibraryModal({ preserveScroll: true });
-  }
 }
 
 function renderSettings() {
   const settings = state.overview?.settings;
   if (!settings) return;
-  settingsForm.base_url.value = settings.llm.base_url || "";
-  settingsForm.api_key.placeholder = settings.llm.api_key ? "已配置，留空则保持不变" : "请输入百炼 API Key";
-  settingsForm.text_model.value = settings.llm.text_model || "";
-  settingsForm.vision_model.value = settings.llm.vision_model || "";
-  settingsForm.temperature.value = settings.llm.temperature ?? 0.2;
-  settingsForm.max_tokens.value = settings.llm.max_tokens ?? 4096;
-  settingsForm.vision_max_tokens.value = settings.llm.vision_max_tokens ?? 1024;
-  settingsForm.image_analysis_limit.value = settings.llm.image_analysis_limit ?? 8;
+  settingsField("base_url").value = settings.llm.base_url || "";
+  settingsField("api_key").placeholder = settings.llm.api_key ? "已配置，留空则保持不变" : "请输入 API Key";
+  settingsField("text_model").value = settings.llm.text_model || "";
+  settingsField("vision_model").value = settings.llm.vision_model || "";
+  settingsField("temperature").value = settings.llm.temperature ?? 0.2;
+  settingsField("max_tokens").value = settings.llm.max_tokens ?? 4096;
+  settingsField("vision_max_tokens").value = settings.llm.vision_max_tokens ?? 1024;
+  settingsField("image_analysis_limit").value = settings.llm.image_analysis_limit ?? 8;
   document.getElementById("export-toggles").innerHTML = Object.entries(exportLabels)
     .map(
       ([key, label]) => `
@@ -316,6 +373,33 @@ function renderSettings() {
       `
     )
     .join("");
+  renderSettingsModal();
+}
+
+function renderSettingsModal() {
+  document.querySelectorAll("[data-settings-panel]").forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.settingsPanel === state.settingsTab);
+  });
+  document.querySelectorAll("[data-settings-tab]").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.settingsTab === state.settingsTab);
+  });
+  settingsThemeOptionEls.forEach((button) => {
+    button.setAttribute("aria-pressed", button.dataset.settingsThemeOption === state.settingsDraftTheme ? "true" : "false");
+  });
+}
+
+function openSettingsModal() {
+  state.settingsModalOpen = true;
+  state.settingsDraftTheme = currentTheme();
+  renderSettings();
+  settingsModalEl.classList.remove("hidden");
+  settingsModalEl.setAttribute("aria-hidden", "false");
+}
+
+function closeSettingsModal() {
+  state.settingsModalOpen = false;
+  settingsModalEl.classList.add("hidden");
+  settingsModalEl.setAttribute("aria-hidden", "true");
 }
 
 function renderPapers() {
@@ -391,10 +475,15 @@ function renderOverviewTab() {
   const { metadata, parsed, review } = state.selectedPaper;
   ensureReviewDraft(metadata.id);
   const selectedRules = selectedReviewRules();
-  const builtin = builtinRules();
+  const selectedBuiltin = selectedBuiltinRules();
   const sourceLink = metadata.source_relative_path ? `/files/${metadata.source_relative_path}` : "#";
   tabOverviewEl.innerHTML = `
     <div class="overview-grid">
+      <article class="overview-wide">
+        <h3>当前报告摘要</h3>
+        ${review.generation_mode === "failed" ? `<p><strong>审稿失败：</strong>${escapeHtml(review.error_message || "模型调用失败。")}</p>` : ""}
+        <p>${escapeHtml(review.summary || "还没有生成审稿报告。解析完成后，点击“开始审稿”即可生成。")}</p>
+      </article>
       <article>
         <h3>任务信息</h3>
         <p>上传时间：${formatTime(metadata.created_at)}</p>
@@ -410,6 +499,30 @@ function renderOverviewTab() {
         <p>段落数：${parsed.stats?.paragraph_count ?? 0}</p>
         <p>表格数：${parsed.stats?.table_count ?? 0}</p>
         <p>图片数：${parsed.stats?.image_count ?? 0}</p>
+      </article>
+      <article>
+        <h3>评分概览</h3>
+        <div class="score-summary">
+          <div class="score-summary-total">
+            <small>总评分</small>
+            <strong>${review.total_score ?? "-"}</strong>
+            <span class="score-result ${review.pass ? "pass" : "fail"}">${review.pass ? "合格" : "不合格"}</span>
+          </div>
+          <div class="score-summary-list">
+            ${(review.dimension_scores || []).length
+              ? review.dimension_scores
+                  .map(
+                    (item) => `
+                      <div class="score-summary-item">
+                        <span>${escapeHtml(item.name)}</span>
+                        <strong>${item.score}</strong>
+                      </div>
+                    `
+                  )
+                  .join("")
+              : `<p class="muted">当前还没有可展示的评分结果。</p>`}
+          </div>
+        </div>
       </article>
       <article>
         <h3>审稿设置</h3>
@@ -439,15 +552,15 @@ function renderOverviewTab() {
           <div class="panel-head review-rule-head">
             <div>
               <strong>本次使用规则</strong>
-              <p class="muted">系统默认规则始终生效，你可以再叠加自定义规则集。</p>
+              <p class="muted">系统规则和自定义规则都支持人工勾选；未勾选的规则不会参与本次审稿。</p>
             </div>
             <button type="button" class="ghost" data-open-review-rules>选择规则</button>
           </div>
           <div class="rule-section-block">
             <div class="rule-section-title">系统默认规则</div>
             <div class="builtin-rule-list">
-              ${builtin.length
-                ? builtin
+              ${selectedBuiltin.length
+                ? selectedBuiltin
                     .map(
                       (rule) => `
                         <article class="builtin-rule-card">
@@ -457,25 +570,20 @@ function renderOverviewTab() {
                       `
                     )
                     .join("")
-                : `<p class="muted">当前没有可展示的系统默认规则。</p>`}
+                : `<p class="muted">当前未选择系统默认规则。</p>`}
             </div>
           </div>
           <div class="rule-section-block">
-            <div class="rule-section-title">本次叠加的自定义规则</div>
+            <div class="rule-section-title">本次使用的自定义规则</div>
           <div class="selected-rule-list">
             ${selectedRules.length
               ? selectedRules
                   .map((rule) => `<span class="selected-rule-chip">${escapeHtml(rule.name)}</span>`)
                   .join("")
-              : `<p class="muted">当前未额外选择自定义规则，将仅使用系统默认规则。</p>`}
+              : `<p class="muted">当前未选择自定义规则。</p>`}
           </div>
           </div>
         </div>
-      </article>
-      <article>
-        <h3>当前报告摘要</h3>
-        ${review.generation_mode === "failed" ? `<p><strong>审稿失败：</strong>${escapeHtml(review.error_message || "百炼调用失败。")}</p>` : ""}
-        <p>${escapeHtml(review.summary || "还没有生成审稿报告。解析完成后，点击“开始审稿”即可生成。")}</p>
       </article>
     </div>
   `;
@@ -627,7 +735,7 @@ function renderReviewTab() {
   const review = state.selectedPaper.review || {};
   const metadata = state.selectedPaper.metadata || {};
   if (!review || !Object.keys(review).length) {
-    tabReviewEl.innerHTML = `<div class="empty-state"><div><h3>还没有审稿报告</h3><p>解析完成后，点击上方“开始审稿”即可生成报告。当前版本必须使用百炼模型，若配置缺失或调用失败，会直接给出错误信息。</p></div></div>`;
+    tabReviewEl.innerHTML = `<div class="empty-state"><div><h3>还没有审稿报告</h3><p>解析完成后，点击上方“开始审稿”即可生成报告。当前版本必须使用已配置的 LLM 接口，若配置缺失或调用失败，会直接给出错误信息。</p></div></div>`;
     return;
   }
   if (review.generation_mode === "terminated") {
@@ -637,7 +745,7 @@ function renderReviewTab() {
           <h4>上次审稿已中断</h4>
           <p>应用在审稿过程中被关闭或重启，这次任务没有继续执行，也没有生成有效报告。</p>
           <p><strong>说明：</strong>${escapeHtml(review.error_message || metadata.last_warning || "任务已中断。")}</p>
-          <p>请点击上方“开始审稿”，从当前论文重新发起一次百炼审稿。</p>
+          <p>请点击上方“开始审稿”，从当前论文重新发起一次模型审稿。</p>
         </article>
       </div>
     `;
@@ -647,7 +755,7 @@ function renderReviewTab() {
     tabReviewEl.innerHTML = `
       <div class="parsed-grid">
         <article class="block-card warning-card">
-          <h4>百炼审稿失败</h4>
+          <h4>模型审稿失败</h4>
           <p>本次审稿没有回退到本地模式，因此当前没有生成有效报告。</p>
           <p><strong>失败原因：</strong>${escapeHtml(review.error_message || metadata.last_error || "未知错误")}</p>
           <p>建议先检查 API Key、模型名、最大输出长度以及网络连通性，再重新发起审稿。</p>
@@ -661,7 +769,7 @@ function renderReviewTab() {
       ${(review.generation_mode && review.generation_mode !== "model") ? `
         <article class="block-card warning-card">
           <h4>旧版报告提示</h4>
-          <p>这份报告不是当前强制百炼模式下生成的结果，建议重新发起一次审稿。</p>
+          <p>这份报告不是当前模型审稿流程生成的结果，建议重新发起一次审稿。</p>
         </article>
       ` : ""}
       <article class="block-card">
@@ -1043,20 +1151,23 @@ async function handleRuleSubmit(event) {
   ruleForm.querySelectorAll('input[type="file"]').forEach((input) => updateDropzoneFilename(input));
   showToast("规则集已保存。");
   await loadOverview();
+  if (state.settingsModalOpen) {
+    state.settingsTab = "rules";
+    openSettingsModal();
+  }
 }
 
-async function handleSettingsSubmit(event) {
-  event.preventDefault();
+async function handleSettingsSubmit() {
   const payload = {
     llm: {
-      base_url: settingsForm.base_url.value.trim(),
-      api_key: settingsForm.api_key.value.trim(),
-      text_model: settingsForm.text_model.value.trim(),
-      vision_model: settingsForm.vision_model.value.trim(),
-      temperature: Number(settingsForm.temperature.value || 0.2),
-      max_tokens: Number(settingsForm.max_tokens.value || 4096),
-      vision_max_tokens: Number(settingsForm.vision_max_tokens.value || 1024),
-      image_analysis_limit: Number(settingsForm.image_analysis_limit.value || 8),
+      base_url: settingsField("base_url").value.trim(),
+      api_key: settingsField("api_key").value.trim(),
+      text_model: settingsField("text_model").value.trim(),
+      vision_model: settingsField("vision_model").value.trim(),
+      temperature: Number(settingsField("temperature").value || 0.2),
+      max_tokens: Number(settingsField("max_tokens").value || 4096),
+      vision_max_tokens: Number(settingsField("vision_max_tokens").value || 1024),
+      image_analysis_limit: Number(settingsField("image_analysis_limit").value || 8),
     },
     export: {},
   };
@@ -1068,9 +1179,11 @@ async function handleSettingsSubmit(event) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  settingsForm.api_key.value = "";
+  applyTheme(state.settingsDraftTheme);
+  settingsField("api_key").value = "";
   showToast("设置已保存。");
   await loadOverview();
+  closeSettingsModal();
 }
 
 async function handleRuleToggle(ruleId, enabled) {
@@ -1159,67 +1272,62 @@ function openReviewRulesModal(options = {}) {
   const rules = enabledRules();
   const builtin = builtinRules();
   state.reviewRuleDraftIds = [...state.reviewDraft.ruleIds];
+  state.reviewBuiltinRuleDraftIds = [...(state.reviewDraft.builtinRuleIds || [])];
   reviewRulesModalMetaEl.textContent = rules.length
-    ? `可选 ${rules.length} 个已启用规则集，勾选后会与系统默认规则一起参与本次审稿。`
-    : "当前没有已启用规则集，可先到规则管理里启用需要的规则。";
-  reviewRulesModalBodyEl.innerHTML = rules.length
-    ? `
-        <section class="rule-modal-section">
-          <h4>系统默认规则</h4>
-          <div class="builtin-rule-list">
-            ${builtin
-              .map(
-                (rule) => `
-                  <article class="builtin-rule-card">
-                    <strong>${escapeHtml(rule.title)}</strong>
-                    <p>${escapeHtml(rule.body)}</p>
-                  </article>
-                `
-              )
-              .join("")}
-          </div>
-        </section>
-        <section class="rule-modal-section">
-          <h4>勾选要叠加的自定义规则</h4>
-          <div class="rule-modal-list">
-            ${rules
-              .map(
-                (rule) => `
-                  <label class="review-rule-option">
-                    <input type="checkbox" data-review-rule-option="${rule.id}" ${
-                      state.reviewRuleDraftIds.includes(rule.id) ? "checked" : ""
-                    } />
-                    <div>
-                      <strong>${escapeHtml(rule.name)}</strong>
-                      <div class="muted">${escapeHtml(
-                        truncateText((rule.items || []).slice(0, 2).map((item) => item.body).join("；") || rule.content, 120)
-                      )}</div>
-                    </div>
-                  </label>
-                `
-              )
-              .join("")}
-          </div>
-        </section>
-      `
-    : `
-        <section class="rule-modal-section">
-          <h4>系统默认规则</h4>
-          <div class="builtin-rule-list">
-            ${builtin
-              .map(
-                (rule) => `
-                  <article class="builtin-rule-card">
-                    <strong>${escapeHtml(rule.title)}</strong>
-                    <p>${escapeHtml(rule.body)}</p>
-                  </article>
-                `
-              )
-              .join("")}
-          </div>
-        </section>
-        <p class="muted">当前没有可选规则。你可以先保存规则集并启用它，再回来选择。</p>
-      `;
+    ? `可选 ${builtin.length} 条系统规则与 ${rules.length} 个已启用规则集，勾选后才会参与本次审稿。`
+    : `当前没有已启用自定义规则，你仍可选择 ${builtin.length} 条系统规则参与本次审稿。`;
+  reviewRulesModalBodyEl.innerHTML = `
+      <section class="rule-modal-section">
+        <h4>勾选要启用的系统默认规则</h4>
+        <div class="rule-modal-list">
+          ${builtin.length
+            ? builtin
+                .map(
+                  (rule) => `
+                    <label class="review-rule-option">
+                      <input type="checkbox" data-builtin-rule-option="${rule.id}" ${
+                        state.reviewBuiltinRuleDraftIds.includes(rule.id) ? "checked" : ""
+                      } />
+                      <div>
+                        <strong>${escapeHtml(rule.title)}</strong>
+                        <div class="muted">${escapeHtml(rule.body)}</div>
+                      </div>
+                    </label>
+                  `
+                )
+                .join("")
+            : `<p class="muted">当前没有可用的系统默认规则。</p>`}
+        </div>
+      </section>
+      <section class="rule-modal-section">
+        <h4>勾选要启用的自定义规则</h4>
+        ${
+          rules.length
+            ? `
+              <div class="rule-modal-list">
+                ${rules
+                  .map(
+                    (rule) => `
+                      <label class="review-rule-option">
+                        <input type="checkbox" data-review-rule-option="${rule.id}" ${
+                          state.reviewRuleDraftIds.includes(rule.id) ? "checked" : ""
+                        } />
+                        <div>
+                          <strong>${escapeHtml(rule.name)}</strong>
+                          <div class="muted">${escapeHtml(
+                            truncateText((rule.items || []).slice(0, 2).map((item) => item.body).join("；") || rule.content, 120)
+                          )}</div>
+                        </div>
+                      </label>
+                    `
+                  )
+                  .join("")}
+              </div>
+            `
+            : `<p class="muted">当前没有可选自定义规则。你可以先保存规则集并启用它，再回来选择。</p>`
+        }
+      </section>
+    `;
   state.reviewRulesModalOpen = true;
   reviewRulesModalEl.classList.remove("hidden");
   reviewRulesModalEl.setAttribute("aria-hidden", "false");
@@ -1238,7 +1346,11 @@ function applyReviewRuleSelection() {
   const checkedIds = Array.from(reviewRulesModalBodyEl.querySelectorAll("[data-review-rule-option]:checked")).map(
     (input) => input.dataset.reviewRuleOption
   );
+  const checkedBuiltinIds = Array.from(reviewRulesModalBodyEl.querySelectorAll("[data-builtin-rule-option]:checked")).map(
+    (input) => input.dataset.builtinRuleOption
+  );
   state.reviewDraft.ruleIds = checkedIds;
+  state.reviewDraft.builtinRuleIds = checkedBuiltinIds;
   closeReviewRulesModal();
   renderOverviewTab();
 }
@@ -1247,6 +1359,7 @@ function currentReviewPayload() {
   return {
     review_mode: state.reviewDraft.mode || state.selectedPaper.metadata.review_mode,
     rule_ids: state.reviewDraft.ruleIds || [],
+    builtin_rule_ids: state.reviewDraft.builtinRuleIds || [],
   };
 }
 
@@ -1295,18 +1408,30 @@ async function deletePaper(paperId) {
   await loadOverview(false);
 }
 
+async function goHome() {
+  state.selectedPaperId = null;
+  state.selectedPaper = null;
+  state.activeTab = "overview";
+  state.selectedIssueId = null;
+  state.activeMappingIssueId = null;
+  await loadOverview(false);
+  showToast("已返回首页。");
+}
+
 function bindEvents() {
   paperForm.addEventListener("submit", (event) => handlePaperSubmit(event).catch((error) => showToast(error.message)));
   ruleForm.addEventListener("submit", (event) => handleRuleSubmit(event).catch((error) => showToast(error.message)));
-  settingsForm.addEventListener("submit", (event) => handleSettingsSubmit(event).catch((error) => showToast(error.message)));
   refreshBtn.addEventListener("click", () => loadOverview().catch((error) => showToast(error.message)));
   reviewBtn.addEventListener("click", () => triggerReview().catch((error) => showToast(error.message)));
   reparseBtn.addEventListener("click", () => triggerReparse().catch((error) => showToast(error.message)));
   exportMarkdownBtn.addEventListener("click", () => triggerExport("markdown").catch((error) => showToast(error.message)));
   exportPdfBtn.addEventListener("click", () => triggerExport("pdf").catch((error) => showToast(error.message)));
   exportDocxBtn.addEventListener("click", () => triggerExport("docx").catch((error) => showToast(error.message)));
+  homeBtn.addEventListener("click", () => goHome().catch((error) => showToast(error.message)));
+  settingsBtn.addEventListener("click", () => openSettingsModal());
+  settingsSaveBtn.addEventListener("click", () => handleSettingsSubmit().catch((error) => showToast(error.message)));
   reviewRulesClearBtn.addEventListener("click", () => {
-    reviewRulesModalBodyEl.querySelectorAll("[data-review-rule-option]").forEach((input) => {
+    reviewRulesModalBodyEl.querySelectorAll("[data-review-rule-option], [data-builtin-rule-option]").forEach((input) => {
       input.checked = false;
     });
   });
@@ -1326,10 +1451,23 @@ function bindEvents() {
       return;
     }
 
-    const themeOption = event.target.closest("[data-theme-option]");
-    if (themeOption) {
-      applyTheme(themeOption.dataset.themeOption);
-      showToast(`背景主题已切换为${themeOption.textContent.trim()}。`, 1800);
+    const settingsTabButton = event.target.closest("[data-settings-tab]");
+    if (settingsTabButton) {
+      state.settingsTab = settingsTabButton.dataset.settingsTab;
+      renderSettingsModal();
+      return;
+    }
+
+    const settingsThemeOption = event.target.closest("[data-settings-theme-option]");
+    if (settingsThemeOption) {
+      state.settingsDraftTheme = settingsThemeOption.dataset.settingsThemeOption;
+      renderSettingsModal();
+      return;
+    }
+
+    const settingsCloseButton = event.target.closest("[data-close-settings-modal]");
+    if (settingsCloseButton) {
+      closeSettingsModal();
       return;
     }
 
@@ -1412,6 +1550,10 @@ function bindEvents() {
   });
 
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !settingsModalEl.classList.contains("hidden")) {
+      closeSettingsModal();
+      return;
+    }
     if (event.key === "Escape" && !ruleModalEl.classList.contains("hidden")) {
       closeRuleModal();
       return;
@@ -1436,6 +1578,7 @@ function startPolling() {
 
 async function main() {
   initTheme();
+  state.settingsDraftTheme = currentTheme();
   bindDropzones();
   bindEvents();
   await loadOverview(false);

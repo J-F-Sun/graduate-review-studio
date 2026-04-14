@@ -60,9 +60,12 @@ def parse_rule_content(content: str) -> list[dict]:
     return items
 
 
-def build_active_rule_text(rule_sets: list[dict]) -> str:
+def build_active_rule_text(rule_sets: list[dict], builtin_rule_ids: list[str] | None = None) -> str:
     lines = []
+    selected_builtin_ids = set(builtin_rule_ids) if builtin_rule_ids is not None else None
     for builtin in DEFAULT_RULES:
+        if selected_builtin_ids is not None and builtin["id"] not in selected_builtin_ids:
+            continue
         lines.append(f"- {builtin['title']}：{builtin['body']}")
     for rule_set in rule_sets:
         if not rule_set.get("enabled", True):

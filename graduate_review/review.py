@@ -4,7 +4,8 @@ import logging
 from pathlib import Path
 from typing import Any, Callable
 
-from .llm import LLMClient, LLMRequestError
+from .llm import LLMClient, LLMRequestError, provider_display_name
+from .parsers.common import is_acknowledgement_title
 from .rules import build_active_rule_text
 from .utils import clean_text, new_id, now_iso, truncate
 
@@ -232,9 +233,15 @@ def _chunk_sections(parsed: dict[str, Any], mode: str) -> list[dict[str, Any]]:
     for image in parsed.get("images", []):
         images_by_section.setdefault(image["section_id"], []).append(image)
 
-    top_sections = [section for section in parsed.get("sections", []) if section.get("level") == 1]
+    top_sections = [
+        section
+        for section in parsed.get("sections", [])
+        if section.get("level") == 1 and not is_acknowledgement_title(section.get("title", ""))
+    ]
     if not top_sections:
-        top_sections = parsed.get("sections", [])[:]
+        top_sections = [
+            section for section in parsed.get("sections", []) if not is_acknowledgement_title(section.get("title", ""))
+        ]
 
     chunks: list[dict[str, Any]] = []
     paragraph_limit = 12 if mode == "快速审稿" else 24
@@ -275,6 +282,15 @@ async def _analyze_images_with_model(
     updated = False
     warnings: list[str] = parsed.setdefault("image_analysis_warnings", [])
     images = parsed.get("images", [])[:limit]
+    if not images:
+        return parsed
+    if not llm_client.settings.get("vision_model"):
+        warnings.append("当前未配置视觉模型，已跳过图片理解，审稿将仅基于正文、表格与已有图片说明。")
+        logger.info("image analysis skipped reason=no-vision-model image_count=%s", len(images))
+        for image in images:
+            image["analysis_status"] = image.get("analysis_status") or "vision-skipped"
+            image["content_summary"] = image.get("content_summary") or "未配置视觉模型，已跳过图片理解。"
+        return parsed
     if images:
         _notify_progress(progress_callback, f"正在解析图片内容（0/{len(images)}）")
     for index, image in enumerate(images, start=1):
@@ -341,12 +357,13 @@ async def _model_review(
     rules: list[dict[str, Any]],
     settings: dict[str, Any],
     *,
+    builtin_rule_ids: list[str] | None = None,
     data_root: Path,
     progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     llm_client = LLMClient(settings["llm"])
     image_limit = int(settings["llm"].get("image_analysis_limit", 8))
-    _notify_progress(progress_callback, "正在准备百炼审稿输入")
+    _notify_progress(progress_callback, "正在准备模型审稿输入")
     parsed = await _analyze_images_with_model(
         parsed,
         llm_client=llm_client,
@@ -357,7 +374,7 @@ async def _model_review(
     chunks = _chunk_sections(parsed, metadata.get("review_mode", "快速审稿"))
     _notify_progress(progress_callback, f"正在分章节审稿（共 {len(chunks)} 个章节块）")
     chapter_outputs = []
-    rule_text = build_active_rule_text(rules)
+    rule_text = build_active_rule_text(rules, builtin_rule_ids=builtin_rule_ids)
 
     for index, chunk in enumerate(chunks, start=1):
         section = chunk["section"]
@@ -488,7 +505,7 @@ async def _model_review(
         raise LLMRequestError(f"汇总总评失败：{exc}", stage="final-aggregation") from exc
     review["chapter_reviews"] = chapter_reviews
     review["issues"] = flattened_issues
-    _notify_progress(progress_callback, "百炼审稿完成，正在整理结果")
+    _notify_progress(progress_callback, "模型审稿完成，正在整理结果")
     logger.info(
         "final review result summary=%s total_score=%s issue_count=%s",
         truncate(review.get("summary", ""), 500),
@@ -501,9 +518,14 @@ async def _model_review(
     )
     review["generated_at"] = now_iso()
     review["mode"] = metadata.get("review_mode", "快速审稿")
-    review["provider"] = settings["llm"].get("provider", "dashscope-compatible")
+    review["provider"] = llm_client.settings.get("provider", settings["llm"].get("provider", "openai-compatible"))
     review["generation_mode"] = "model"
-    review["generation_notes"] = ["当前报告已使用百炼模型生成，总评与评分由百炼汇总，逐章评价与问题清单沿用分章审稿结果。"]
+    generation_notes = [
+        f"当前报告已使用 {provider_display_name(llm_client.settings)} 生成，总评与评分由模型汇总，逐章评价与问题清单沿用分章审稿结果。"
+    ]
+    if any(is_acknowledgement_title(section.get("title", "")) for section in parsed.get("sections", [])):
+        generation_notes.append("检测到“致谢”章节，已按规则跳过详细审查，仅保留章节存在信息。")
+    review["generation_notes"] = generation_notes
     review["fallback_info"] = None
     review.setdefault("dimension_scores", [])
     review.setdefault("chapter_reviews", [])
@@ -566,18 +588,23 @@ async def generate_review(
     rules: list[dict[str, Any]],
     settings: dict[str, Any],
     *,
+    builtin_rule_ids: list[str] | None = None,
     data_root: Path,
     progress_callback: ProgressCallback | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     llm_client = LLMClient(settings["llm"])
     if not llm_client.configured:
-        raise LLMRequestError("未配置百炼 API Key，当前版本禁止回退到本地启发式审稿。", stage="configuration")
+        raise LLMRequestError(
+            f"未配置 {provider_display_name(llm_client.settings)} API Key，当前版本禁止回退到本地启发式审稿。",
+            stage="configuration",
+        )
     review = _normalize_review(
         await _model_review(
             metadata,
             parsed,
             rules,
             settings,
+            builtin_rule_ids=builtin_rule_ids,
             data_root=data_root,
             progress_callback=progress_callback,
         )

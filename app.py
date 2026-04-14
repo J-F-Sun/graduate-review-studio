@@ -17,8 +17,18 @@ from graduate_review.storage import Storage
 from graduate_review.utils import clean_text
 
 
+class AccessLogNoiseFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        if " 304 " not in message:
+            return True
+        return not ('"GET /files/' in message or '"GET /static/' in message)
+
+
 APP_ROOT = Path(__file__).resolve().parent
 logger = logging.getLogger("uvicorn.error")
+access_logger = logging.getLogger("uvicorn.access")
+access_logger.addFilter(AccessLogNoiseFilter())
 storage = Storage(APP_ROOT)
 jobs = JobManager(storage, APP_ROOT)
 
@@ -124,15 +134,17 @@ async def review_paper(paper_id: str, payload: dict[str, Any]) -> JSONResponse:
     if not storage.read_paper_metadata(paper_id):
         raise HTTPException(status_code=404, detail="Paper not found.")
     logger.info(
-        "paper review requested paper_id=%s mode=%s rule_count=%s",
+        "paper review requested paper_id=%s mode=%s rule_count=%s builtin_rule_count=%s",
         paper_id,
         payload.get("review_mode"),
         len(payload.get("rule_ids", [])),
+        len(payload.get("builtin_rule_ids", [])),
     )
     jobs.enqueue_review(
         paper_id,
         review_mode=payload.get("review_mode"),
         rule_ids=payload.get("rule_ids", []),
+        builtin_rule_ids=payload.get("builtin_rule_ids"),
     )
     return JSONResponse({"ok": True})
 
@@ -144,6 +156,14 @@ async def delete_paper(paper_id: str) -> JSONResponse:
     logger.info("paper delete requested paper_id=%s", paper_id)
     jobs.cancel_tasks_for_paper(paper_id)
     storage.delete_paper(paper_id)
+    return JSONResponse({"ok": True})
+
+
+@app.delete("/api/home")
+async def reset_home() -> JSONResponse:
+    logger.info("home reset requested")
+    jobs.cancel_all_tasks()
+    storage.clear_all_papers()
     return JSONResponse({"ok": True})
 
 

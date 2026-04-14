@@ -6,7 +6,7 @@
 
 <p align="center">
   面向本科与硕士论文的本地审稿辅助系统。<br />
-  支持论文解析、图表理解、规则叠加、百炼审稿，以及 Markdown / PDF / Word 批注版导出。
+  支持论文解析、图表理解、规则叠加、兼容 OpenAI 风格接口的模型审稿，以及 Markdown / PDF / Word 批注版导出。
 </p>
 
 <p align="center">
@@ -37,7 +37,7 @@
 - 单独抽取表格、图片及其上下文信息
 - 对图片内容做独立理解
 - 支持学院要求、导师关注点等自定义规则集
-- 调用阿里云百炼平台进行快速审稿 / 深度审稿
+- 调用兼容 OpenAI 风格接口的平台进行快速审稿 / 深度审稿
 - 输出总分、分项分数、重点问题、原文证据、润色建议
 - 支持“论文内容 - 审稿意见”对应查看
 - 支持 Markdown / PDF 审稿报告导出
@@ -73,13 +73,14 @@
 - 启用 / 停用 / 删除规则
 - 审稿时按需叠加到系统默认规则
 
-### 3. 百炼设置
+### 3. LLM 设置
 
-- 配置百炼兼容接口地址
+- 配置兼容 OpenAI 风格的接口地址
 - 配置 API Key
 - 分别配置文本审稿模型与图片理解模型
 - 分别配置文本输出上限与图片输出上限
 - 配置图片理解数量上限
+  - 若当前服务商不提供视觉模型，可将视觉模型留空，系统会跳过图片理解，仅基于正文、表格与已有图题继续审稿
 - 配置导出内容模块
 
 ### 4. 论文任务
@@ -145,7 +146,7 @@
 - `FastAPI`
 - 本地 JSON 持久化
 - 异步任务调度
-- `httpx` 调用百炼兼容接口
+- `httpx` 调用兼容 OpenAI 风格的接口
 
 ### 文档解析
 
@@ -227,17 +228,20 @@ python3 -m pip install -r requirements.txt --target .deps
 PYTHONPATH=.deps python3 -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-## 百炼配置建议
+## 接口配置建议
 
 建议在页面左侧填写：
 
 - 接口地址：
   - `https://dashscope.aliyuncs.com/compatible-mode/v1`
-- 百炼 API Key
+  - 或 `https://api.deepseek.com`
+- API Key
 - 文本模型：
   - 例如 `qwen3.5-plus`
+  - 或 `deepseek-chat`
 - 视觉模型：
   - 例如 `qwen3-vl-plus`
+  - 若使用 DeepSeek 且当前无视觉模型，可留空
 - 文本输出上限：
   - 建议从 `4096` 或 `8192` 开始
 - 图片输出上限：
@@ -254,7 +258,7 @@ PYTHONPATH=.deps python3 -m uvicorn app:app --host 127.0.0.1 --port 8000 --reloa
 - 任务入队日志
 - 解析开始 / 结束日志
 - 审稿步骤日志
-- 百炼请求开始 / 结束日志
+- LLM 请求开始 / 结束日志
 - 图片解析成功 / 失败日志
 - 章节审稿结果预览
 - 总评结果预览
@@ -262,9 +266,9 @@ PYTHONPATH=.deps python3 -m uvicorn app:app --host 127.0.0.1 --port 8000 --reloa
 如果模型确实有返回，终端会出现类似：
 
 ```text
-===== 百炼输出预览开始 model=qwen3.5-plus =====
+===== LLM输出预览开始 provider=deepseek model=deepseek-chat =====
 ...
-===== 百炼输出预览结束 model=qwen3.5-plus =====
+===== LLM输出预览结束 provider=deepseek model=deepseek-chat =====
 ```
 
 ## 当前限制

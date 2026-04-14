@@ -18,7 +18,9 @@ from ..utils import clean_text, slugify, truncate
 from .common import (
     StructureBuilder,
     infer_heading_level,
+    is_keyword_section_title,
     looks_like_figure_caption,
+    looks_like_english_front_matter,
     looks_like_table_caption,
     split_inline_preface_heading,
 )
@@ -90,6 +92,11 @@ def parse_docx(
             }
             if text:
                 recent_texts.append(text)
+                if is_keyword_section_title(builder.current_section_title()) and looks_like_english_front_matter(text):
+                    builder.add_heading("英文摘要前置信息", 1, page_number=None, source_anchor=current_anchor)
+                    builder.add_paragraph(text, role="body", page_number=None, source_anchor=current_anchor)
+                    paragraph_index += 1
+                    continue
                 inline_heading = split_inline_preface_heading(text)
                 if inline_heading:
                     heading_title, body = inline_heading

@@ -218,12 +218,21 @@ select {
 }
 
 .panel-head,
-.detail-header,
 .hero {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.detail-header {
+  display: grid;
+  gap: 14px;
+}
+
+.detail-heading {
+  display: grid;
+  gap: 8px;
 }
 
 .topbar-panel {
@@ -241,6 +250,10 @@ select {
   justify-content: center;
 }
 
+.topbar-intro {
+  gap: 18px;
+}
+
 .topbar-side {
   gap: 12px;
   align-items: stretch;
@@ -251,6 +264,12 @@ select {
   grid-template-columns: 76px 1fr;
   gap: 14px;
   align-items: center;
+}
+
+.topbar-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .topbar-logo {
@@ -266,17 +285,6 @@ select {
 
 .topbar-copy p:last-child {
   margin-bottom: 0;
-}
-
-.topbar-appearance-compact {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.topbar-appearance-head h2 {
-  margin: 0;
-  font-size: 18px;
 }
 
 .topbar-stats {
@@ -312,16 +320,6 @@ select {
   display: block;
   font-size: 28px;
   font-family: "Iowan Old Style", "Songti SC", Georgia, serif;
-}
-
-.compact-switcher {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.compact-switcher .theme-option {
-  padding: 10px 12px;
-  min-height: 46px;
-  font-size: 14px;
 }
 
 .badge {
@@ -543,6 +541,12 @@ textarea {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .settings-span-2 {
@@ -797,6 +801,7 @@ button.ghost {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .tab-bar {
@@ -835,6 +840,56 @@ button.ghost {
 
 .overview-grid > article {
   padding: 16px;
+}
+
+.overview-wide {
+  grid-column: 1 / -1;
+}
+
+.score-summary {
+  display: grid;
+  gap: 14px;
+}
+
+.score-summary-total {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255, 247, 239, 0.92), rgba(255, 255, 255, 0.82));
+  border: 1px solid rgba(154, 63, 35, 0.14);
+}
+
+.score-summary-total strong {
+  font-size: 34px;
+  font-family: "Iowan Old Style", "Songti SC", Georgia, serif;
+}
+
+.score-result {
+  font-weight: 700;
+}
+
+.score-result.pass {
+  color: var(--success);
+}
+
+.score-result.fail {
+  color: var(--danger);
+}
+
+.score-summary-list {
+  display: grid;
+  gap: 10px;
+}
+
+.score-summary-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--line);
 }
 
 .score-grid {
@@ -1355,6 +1410,74 @@ button.ghost {
   gap: 16px;
 }
 
+.settings-modal-card {
+  width: min(1120px, calc(100vw - 40px));
+}
+
+.settings-shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
+  min-height: 0;
+  flex: 1;
+}
+
+.settings-tabs {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding-right: 4px;
+}
+
+.settings-tab {
+  text-align: left;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.settings-tab.active {
+  background: rgba(154, 63, 35, 0.12);
+  color: var(--primary);
+  border-color: rgba(154, 63, 35, 0.24);
+}
+
+.settings-panels {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.settings-panels label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.settings-panel {
+  display: none;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.settings-panel.active {
+  display: grid;
+}
+
+.modal-theme-switcher {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.settings-rule-list {
+  max-height: 420px;
+}
+
+.settings-modal-actions {
+  padding-top: 4px;
+}
+
 .modal-head {
   align-items: flex-start;
   gap: 16px;
@@ -1490,6 +1613,11 @@ button.ghost {
   .detail-actions,
   .tab-bar {
     width: 100%;
+  }
+
+  .detail-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .brand-logo {

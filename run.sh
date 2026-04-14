@@ -1,0 +1,1 @@
+PYTHONPATH=.deps uv run --python 3.12.13 python -m uvicorn app:app --host 127.0.0.1 --port 8000 --reload
