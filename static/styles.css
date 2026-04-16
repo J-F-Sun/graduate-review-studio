@@ -591,6 +591,61 @@ select {
   flex-wrap: wrap;
 }
 
+.review-stage-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.review-stage-actions-left,
+.review-stage-actions-right {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.review-stage-tool-button {
+  min-height: 42px;
+  padding: 10px 18px;
+  border-radius: 18px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.review-stage-tabbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 4px;
+}
+
+.review-stage-nav-tab {
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--muted);
+  min-height: 44px;
+  padding: 10px 22px;
+  border-radius: 18px;
+  font-size: 15px;
+  font-weight: 600;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.review-stage-nav-tab:hover {
+  border-color: rgba(154, 63, 35, 0.24);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.review-stage-nav-tab.active {
+  color: var(--primary);
+  border-color: rgba(154, 63, 35, 0.32);
+  background: rgba(255, 247, 241, 0.92);
+}
+
 .review-stage-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -717,6 +772,15 @@ select {
   color: var(--secondary);
   font-size: 13px;
   word-break: break-all;
+}
+
+.export-modal-card {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.export-modal-options {
+  display: grid;
+  gap: 12px;
 }
 
 .field-title {
@@ -2074,6 +2138,7 @@ button.ghost {
 
   .review-launch-options,
   .review-stage-actions,
+  .review-stage-toolbar,
   .hero-stage-side {
     flex-direction: column;
     align-items: stretch;
